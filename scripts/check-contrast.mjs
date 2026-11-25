@@ -84,6 +84,16 @@ export const ENFORCED_PAIRS = [
   // pair here means a future relax of either token surfaces as a CI
   // failure, not as a route smoke regression.
   ['warning-50', 'warning-700'],
+  // Cobrar is the one orange control and the navy rail hosts navigation in both themes.
+  ['cobrar', 'cobrar-foreground'],
+  ['rail', 'rail-foreground'],
+  ['rail', 'rail-muted'],
+  // Floor-map tiles: «pidió la cuenta» sets navy text on the warning fill.
+  ['warning-500', 'rail'],
+  ['primary-50', 'secondary-950'],
+  ['primary-50', 'secondary-700'],
+  ['success-50', 'success-700'],
+  ['danger-50', 'danger-700'],
 ];
 
 function floorForPair(pairLabel) {
@@ -316,14 +326,19 @@ const THEME_SELECTORS = [':root', '.dark'];
 export function resolveThemeScopes(scopes) {
   const light = {};
   const dark = {};
+  // `:root.dark` outranks `.dark` by specificity, so it applies last whatever its source order.
+  const rootDark = {};
   for (const { selector, declarations } of scopes) {
     if (selector === ':root') {
       Object.assign(light, declarations);
       Object.assign(dark, declarations);
     } else if (selector === '.dark') {
       Object.assign(dark, declarations);
+    } else if (selector === ':root.dark') {
+      Object.assign(rootDark, declarations);
     }
   }
+  Object.assign(dark, rootDark);
   return [
     { selector: ':root', declarations: light },
     { selector: '.dark', declarations: dark },

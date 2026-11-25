@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   DashboardLoadingState,
@@ -10,7 +11,7 @@ import {
 } from '@/features/dashboard/DashboardPanels';
 import { AnomalyDetectionCard } from '@/features/dashboard/AnomalyDetectionCard';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { managerOrAdminRoles } from '@/features/auth/roleAccess';
+import { managerOrAdminRoles, salesRoles } from '@/features/auth/roleAccess';
 import { NumberingAlertBanner } from '@/features/fiscal/NumberingAlertBanner';
 import { useIsModuleActive } from '@/features/modules';
 import { QueryErrorState } from '@/components/feedback/QueryErrorState';
@@ -27,6 +28,12 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router';
 import { formatNumber } from '@/lib/utils';
+
+const TodayOverview = lazy(() =>
+  import('@/features/dashboard/today/TodayOverview').then(module => ({
+    default: module.TodayOverview,
+  }))
+);
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -61,10 +68,13 @@ export function DashboardPage() {
   // + : anomaly detection is manager+ AND module-gated.
   // Do not render a card that would always call a gated procedure and
   // return MODULE_NOT_ACTIVATED/role FORBIDDEN for the current user.
-  const showAnomalyCard = user
-    ? (managerOrAdminRoles as readonly string[]).includes(user.role) && anomalyModuleActive
-    : false;
+  const isManager = user ? (managerOrAdminRoles as readonly string[]).includes(user.role) : false;
+  const showAnomalyCard = isManager && anomalyModuleActive;
+  const canSell = user ? (salesRoles as readonly string[]).includes(user.role) : false;
   const dashboardQuery = trpc.dashboard.summary.useQuery();
+  // Reads Hoy's cached day without fetching: the latest-day figure hides only once Hoy shows it.
+  const hoyShowsToday =
+    trpc.operations.today.useQuery(undefined, { enabled: false }).data !== undefined;
 
   if (dashboardQuery.isLoading) {
     return <DashboardLoadingState title={t('page.kicker')} />;
@@ -146,62 +156,81 @@ export function DashboardPage() {
   return (
     <div className="dashboard-command-space">
       <NumberingAlertBanner />
-      <section className="pv-frame pv-reveal" data-testid="dashboard-briefing">
-        <div className="pv-frame-core dashboard-briefing">
-          <div className="dashboard-briefing-copy">
-            <div className="dashboard-live-pill">
-              <span className="dashboard-live-dot" aria-hidden="true" />
-              <span>{t('page.liveStatus')}</span>
+      {isManager ? (
+        <Suspense
+          fallback={
+            <div
+              className="min-h-64 animate-pulse rounded-[22px] bg-surface-2"
+              aria-hidden="true"
+            />
+          }
+        >
+          <TodayOverview formatCurrency={formatCurrency} />
+        </Suspense>
+      ) : (
+        <section className="pv-frame pv-reveal" data-testid="dashboard-briefing">
+          <div className="pv-frame-core dashboard-briefing">
+            <div className="dashboard-briefing-copy">
+              <div className="dashboard-live-pill">
+                <span className="dashboard-live-dot" aria-hidden="true" />
+                <span>{t('page.liveStatus')}</span>
+              </div>
+
+              <div className="max-w-2xl">
+                <p className="dashboard-eyebrow">{t('page.kicker')}</p>
+                <h1 className="dashboard-display-title">{t('page.title')}</h1>
+                <p className="dashboard-lede">{t('page.description')}</p>
+              </div>
+
+              {headlineMetric && (
+                <div className="dashboard-headline-metric">
+                  <div>
+                    <p className="dashboard-headline-label">{headlineMetric.title}</p>
+                    <p className="dashboard-headline-value">{headlineMetric.value}</p>
+                  </div>
+                  <div className="dashboard-headline-context">
+                    <CircleCheck className="h-4 w-4" strokeWidth={1.7} aria-hidden="true" />
+                    <span>{headlineMetric.label}</span>
+                  </div>
+                </div>
+              )}
+
+              {canSell && (
+                <Link className="pv-action-pill group" to="/sales">
+                  <span>{t('page.primaryAction')}</span>
+                  <span className="pv-action-island" aria-hidden="true">
+                    <ArrowUpRight className="h-4 w-4" strokeWidth={1.7} />
+                  </span>
+                </Link>
+              )}
             </div>
 
-            <div className="max-w-2xl">
-              <p className="dashboard-eyebrow">{t('page.kicker')}</p>
-              <h1 className="dashboard-display-title">{t('page.title')}</h1>
-              <p className="dashboard-lede">{t('page.description')}</p>
-            </div>
-
-            {headlineMetric && (
-              <div className="dashboard-headline-metric">
+            <div className="dashboard-briefing-signals">
+              <DashboardStatsGrid metrics={supportingMetrics} />
+              <div className="dashboard-sync-card">
                 <div>
-                  <p className="dashboard-headline-label">{headlineMetric.title}</p>
-                  <p className="dashboard-headline-value">{headlineMetric.value}</p>
+                  <p className="dashboard-sync-label">{t('page.freshness.title')}</p>
+                  <p className="dashboard-sync-time">
+                    {t('page.freshness.description', { time: formatDateTime(generatedAt) })}
+                  </p>
                 </div>
-                <div className="dashboard-headline-context">
-                  <CircleCheck className="h-4 w-4" strokeWidth={1.7} aria-hidden="true" />
-                  <span>{headlineMetric.label}</span>
+                <div className="dashboard-sync-meta">
+                  <span>{t('page.revenueWindow.value')}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{t('page.focus.value')}</span>
                 </div>
-              </div>
-            )}
-
-            <Link className="pv-action-pill group" to="/sales">
-              <span>{t('page.primaryAction')}</span>
-              <span className="pv-action-island" aria-hidden="true">
-                <ArrowUpRight className="h-4 w-4" strokeWidth={1.7} />
-              </span>
-            </Link>
-          </div>
-
-          <div className="dashboard-briefing-signals">
-            <DashboardStatsGrid metrics={supportingMetrics} />
-            <div className="dashboard-sync-card">
-              <div>
-                <p className="dashboard-sync-label">{t('page.freshness.title')}</p>
-                <p className="dashboard-sync-time">
-                  {t('page.freshness.description', { time: formatDateTime(generatedAt) })}
-                </p>
-              </div>
-              <div className="dashboard-sync-meta">
-                <span>{t('page.revenueWindow.value')}</span>
-                <span aria-hidden="true">·</span>
-                <span>{t('page.focus.value')}</span>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <div className="dashboard-primary-grid pv-reveal pv-reveal-delay-1">
-        <RevenueTrendCard points={revenueChart} formatCurrency={formatCurrency} />
+        <RevenueTrendCard
+          points={revenueChart}
+          formatCurrency={formatCurrency}
+          hideLatestDay={isManager && hoyShowsToday}
+        />
         <LowStockAlertsCard items={lowStockItems} />
       </div>
 

@@ -2,9 +2,10 @@ import { RefreshCw, ShieldCheck } from 'lucide-react';
 import { lazy, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ManagerApprovalAction } from '@puntovivo/shared/manager-approval';
-import type { ApprovalRequestView } from './useCheckoutApprovals';
+import { RETRYABLE_APPROVAL_STATUSES, type ApprovalRequestView } from './useCheckoutApprovals';
 
-const InlineApprovalDecision = lazy(async () => {
+/** The PIN form loads on demand; checkout and the till return share this boundary. */
+export const LazyInlineApprovalDecision = lazy(async () => {
   const module = await import('@/features/approvals/InlineApprovalDecision');
   return { default: module.InlineApprovalDecision };
 });
@@ -18,15 +19,9 @@ interface CheckoutApprovalPanelProps<Action extends ManagerApprovalAction> {
   onRequest: (action: Action, reason: string) => void;
   onRefresh: () => void;
   help?: string | undefined;
+  /** Why a request cannot be sent yet; a grant asked for now would not match the sale. */
+  requestBlockedReason?: string | undefined;
 }
-
-const RETRYABLE_STATUSES = new Set<ApprovalRequestView['status']>([
-  'not_requested',
-  'rejected',
-  'cancelled',
-  'consumed',
-  'expired',
-]);
 
 /** cashier-facing status, never an elevated manager session. */
 export function CheckoutApprovalPanel<Action extends ManagerApprovalAction>({
@@ -38,6 +33,7 @@ export function CheckoutApprovalPanel<Action extends ManagerApprovalAction>({
   onRequest,
   onRefresh,
   help,
+  requestBlockedReason,
 }: CheckoutApprovalPanelProps<Action>) {
   const { t } = useTranslation('sales');
   const [reasons, setReasons] = useState<Partial<Record<ManagerApprovalAction, string>>>({});
@@ -86,7 +82,7 @@ export function CheckoutApprovalPanel<Action extends ManagerApprovalAction>({
       <div className="mt-3 space-y-3">
         {views.map(view => {
           const reason = reasons[view.action] ?? '';
-          const canRequest = RETRYABLE_STATUSES.has(view.status);
+          const canRequest = RETRYABLE_APPROVAL_STATUSES.has(view.status);
           return (
             <article
               key={view.action}
@@ -137,7 +133,7 @@ export function CheckoutApprovalPanel<Action extends ManagerApprovalAction>({
                     </p>
                   }
                 >
-                  <InlineApprovalDecision
+                  <LazyInlineApprovalDecision
                     action={view.action}
                     requestId={view.requestId}
                     onDecided={onRefresh}
@@ -166,10 +162,18 @@ export function CheckoutApprovalPanel<Action extends ManagerApprovalAction>({
                       }
                     />
                   </label>
+                  {requestBlockedReason && (
+                    <p
+                      className="text-xs text-secondary-700"
+                      data-testid="checkout-approval-request-blocked"
+                    >
+                      {requestBlockedReason}
+                    </p>
+                  )}
                   <button
                     type="button"
                     className="btn-primary w-full justify-center text-sm"
-                    disabled={isRequesting || reason.trim().length < 3}
+                    disabled={isRequesting || reason.trim().length < 3 || !!requestBlockedReason}
                     onClick={() => onRequest(view.action, reason)}
                   >
                     {isRequesting ? t('approval.requesting') : t('approval.request')}

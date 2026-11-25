@@ -68,7 +68,7 @@ export async function signOut(page: Page): Promise<void> {
   if (!(await userMenu.isVisible())) {
     await page
       .locator('header')
-      .getByRole('button', { name: /^(?:open user menu for|abre el menú de usuario de) /i })
+      .getByRole('button', { name: /^(?:open user menu for|abra el menú de usuario de) /i })
       .click();
   }
   const logoutResponse = await prepareLogoutCommit(page);
@@ -210,7 +210,7 @@ export async function openCashSession(page: Page, register: string): Promise<voi
 /** Add one unit of `sku` to the cart through the product search dialog. */
 export async function addProductToCart(page: Page, sku: string): Promise<void> {
   await page
-    .getByRole('button', { name: /search products|buscar productos/i })
+    .getByRole('button', { name: /^(search|buscar)$/i })
     .first()
     .click();
   const dialog = page.getByRole('dialog', { name: /add product|agregar producto/i });

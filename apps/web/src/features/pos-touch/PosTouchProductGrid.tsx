@@ -19,6 +19,8 @@
 import { memo, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatCurrency } from '@/lib/utils';
+import { categoryHue } from '@/lib/categoryHue';
+import { formatQuantity } from './posTouchQuantity';
 import type { Product } from '@/types';
 
 interface PosTouchProductGridProps {
@@ -31,15 +33,8 @@ interface PosTouchProductGridProps {
   emptyMessage?: string | undefined;
   /** Cart quantity per product id, summed across lines. */
   cartQuantities?: ReadonlyMap<string, number>;
-}
-
-const CATEGORY_HUES = [250, 200, 150, 95, 55, 25, 340, 295] as const;
-
-function categoryHue(categoryId: string | null | undefined): number {
-  if (!categoryId) return CATEGORY_HUES[0];
-  let hash = 0;
-  for (const char of categoryId) hash = (hash * 31 + char.charCodeAt(0)) | 0;
-  return CATEGORY_HUES[Math.abs(hash) % CATEGORY_HUES.length] ?? CATEGORY_HUES[0];
+  /** The product whose weight is being asked. */
+  weighingProductId?: string | null;
 }
 
 // The register sells from its own site, so the tenant-wide total is only a fallback.
@@ -54,17 +49,6 @@ function getStockState(product: Product): 'out' | 'low' | 'ok' | null {
   return stock <= product.minStock ? 'low' : 'ok';
 }
 
-const quantityFormatters = new Map<string, Intl.NumberFormat>();
-
-function formatQuantity(value: number, locale: string): string {
-  let formatter = quantityFormatters.get(locale);
-  if (!formatter) {
-    formatter = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
-    quantityFormatters.set(locale, formatter);
-  }
-  return formatter.format(value);
-}
-
 const STOCK_TONE = {
   out: 'text-danger-700',
   low: 'font-medium text-warning-700',
@@ -75,7 +59,19 @@ interface PosTouchTileProps {
   product: Product;
   quantity: number;
   isDisabled: boolean;
+  isWeighing: boolean;
   onSelect: (product: Product) => void;
+}
+
+export function PosTouchQuantityBadge({ id, label }: { id: string; label: string }) {
+  return (
+    <span
+      data-testid={`pos-touch-quantity-${id}`}
+      className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-primary-600 px-1.5 text-xs font-semibold tabular-nums text-white"
+    >
+      {label}
+    </span>
+  );
 }
 
 // memo: a cart tap changes one quantity, so only that tile re-renders.
@@ -83,6 +79,7 @@ const PosTouchTile = memo(function PosTouchTile({
   product,
   quantity,
   isDisabled,
+  isWeighing,
   onSelect,
 }: PosTouchTileProps) {
   const { t, i18n } = useTranslation('posTouch');
@@ -109,16 +106,10 @@ const PosTouchTile = memo(function PosTouchTile({
         .join('. ')}
       disabled={isDisabled}
       onClick={() => onSelect(product)}
-      className="group relative flex min-h-[96px] flex-col justify-between gap-2 rounded-xl border border-line/70 bg-surface-1 p-3 text-left transition-all hover:border-primary-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 disabled:active:scale-100"
+      data-weighing={isWeighing || undefined}
+      className="group relative flex min-h-[96px] flex-col justify-between gap-2 rounded-xl border border-line/70 bg-surface-1 p-3 data-weighing:border-primary-600 data-weighing:bg-accent data-weighing:ring-1 data-weighing:ring-primary-600 text-left transition-all hover:border-primary-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 disabled:active:scale-100"
     >
-      {quantity > 0 ? (
-        <span
-          data-testid={`pos-touch-quantity-${product.id}`}
-          className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-primary-600 px-1.5 text-xs font-semibold tabular-nums text-white"
-        >
-          {quantityLabel}
-        </span>
-      ) : null}
+      {quantity > 0 ? <PosTouchQuantityBadge id={product.id} label={quantityLabel} /> : null}
       <div className="flex items-start gap-2">
         <span
           aria-hidden="true"
@@ -160,6 +151,7 @@ export const PosTouchProductGrid = memo(function PosTouchProductGrid({
   isDisabled = false,
   emptyMessage,
   cartQuantities,
+  weighingProductId = null,
   onSelect,
 }: PosTouchProductGridProps) {
   const { t } = useTranslation('posTouch');
@@ -209,6 +201,7 @@ export const PosTouchProductGrid = memo(function PosTouchProductGrid({
           product={product}
           quantity={cartQuantities?.get(product.id) ?? 0}
           isDisabled={isDisabled}
+          isWeighing={product.id === weighingProductId}
           onSelect={onSelect}
         />
       ))}

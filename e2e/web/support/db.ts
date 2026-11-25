@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
+import { MAX_SITE_QUICK_KEYS } from '../../../packages/shared/src/quick-keys';
 import { E2E_PASSWORD } from './app';
 
 const DB_PATH = join(process.cwd(), 'packages/server/data/local.db');
@@ -614,6 +615,50 @@ function seedScenario(
   }
 }
 
+/**
+ * Appends products to the quick keys of each listed site. Sites are shared by
+ * parallel tests, so other keys stay and only the oldest go once a site is full.
+ */
+export function seedSiteQuickKeys(args: {
+  tenantId: string;
+  siteIds: readonly string[];
+  productIds: readonly string[];
+}): void {
+  const db = openDb();
+  try {
+    db.transaction(() => {
+      for (const siteId of args.siteIds) {
+        db.prepare(
+          'delete from site_quick_keys where tenant_id = ? and site_id = ? and product_id in (select value from json_each(?))'
+        ).run(args.tenantId, siteId, JSON.stringify(args.productIds));
+        const remaining = db
+          .prepare(
+            'select id from site_quick_keys where tenant_id = ? and site_id = ? order by position'
+          )
+          .all(args.tenantId, siteId) as { id: string }[];
+        const overflow = Math.max(
+          0,
+          remaining.length + args.productIds.length - MAX_SITE_QUICK_KEYS
+        );
+        const drop = db.prepare('delete from site_quick_keys where id = ?');
+        remaining.slice(0, overflow).forEach(key => drop.run(key.id));
+        const kept = remaining.slice(overflow);
+        const move = db.prepare('update site_quick_keys set position = ? where id = ?');
+        kept.forEach((key, position) => move.run(position, key.id));
+        const insert = db.prepare(
+          `insert into site_quick_keys (id, tenant_id, site_id, position, kind, product_id)
+           values (?, ?, ?, ?, 'product', ?)`
+        );
+        args.productIds.forEach((productId, index) =>
+          insert.run(makeId('e2e_quick_key'), args.tenantId, siteId, kept.length + index, productId)
+        );
+      }
+    }).immediate();
+  } finally {
+    db.close();
+  }
+}
+
 export function seedSaleScenario(seed: string): SeededSaleScenario {
   return seedScenario(seed);
 }
@@ -648,9 +693,106 @@ export function seedLargeTotalSaleScenario(seed: string): SeededSaleScenario {
   return seedPricedSaleScenario(seed, 123456789);
 }
 
-/** A tiny catalog price exposes cent allocation without fabricating a sale or refund. */
+/** An isolated COP tenant + non-50-multiple price exercises optional 50-peso cash rounding without mutating shared E2E state. */
+export function seedCashRoundingScenario(seed: string): SeededSaleScenario {
+  const scenario = seedSurfaceGateScenario(seed, {}, 'COP');
+  const db = openDb();
+  try {
+    const now = nowIso();
+    const sites = [scenario.site];
+    const unitId = makeId('e2e_round_unit');
+    db.prepare(
+      `insert into units (
+        id, tenant_id, name, abbreviation, dimension, standard_code,
+        reference_factor, is_active, created_at, updated_at
+      ) values (?, ?, 'Unit', 'u', 'count', 'H87', 1, 1, ?, ?)`
+    ).run(unitId, scenario.tenantId, now, now);
+    db.prepare(
+      'insert into sequentials (id, tenant_id, site_id, document_type, prefix) values (?, ?, ?, ?, ?)'
+    ).run(makeId('e2e_round_sequence'), scenario.tenantId, scenario.site.id, 'sale', 'RND-');
+    const manager = seedBusinessUser(db, {
+      tenantId: scenario.tenantId,
+      sites,
+      role: 'manager',
+      templateEmail: 'e2e.manager@local.test',
+      seed: normalizeSeed(seed),
+    });
+    const product = seedBusinessProduct(db, {
+      tenantId: scenario.tenantId,
+      sites,
+      unitId,
+      seed: normalizeSeed(seed),
+      siteStocks: [SITE_STOCK],
+    });
+    db.prepare('update products set price = 5544, price2 = 5544, price3 = 5544 where id = ?').run(
+      product.id
+    );
+    db.prepare('update unit_x_product set price = 5544 where product_id = ?').run(product.id);
+    return {
+      tenantId: scenario.tenantId,
+      sites,
+      admin: scenario.admin,
+      manager,
+      cashier: manager,
+      product,
+    };
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * A tiny catalog price exposes cent allocation without fabricating a sale or
+ * refund. COP pays in whole pesos, so the isolated tenant settles in USD.
+ */
 export function seedCentRefundScenario(seed: string): SeededSaleScenario {
-  return seedPricedSaleScenario(seed, 0.01);
+  const scenario = seedSurfaceGateScenario(seed, {}, 'USD');
+  const db = openDb();
+  try {
+    const now = nowIso();
+    const sites = [scenario.site];
+    const unitId = makeId('e2e_cent_unit');
+    db.prepare(
+      `insert into units (
+        id, tenant_id, name, abbreviation, dimension, standard_code,
+        reference_factor, is_active, created_at, updated_at
+      ) values (?, ?, 'Unit', 'u', 'count', 'H87', 1, 1, ?, ?)`
+    ).run(unitId, scenario.tenantId, now, now);
+    db.prepare(
+      'insert into sequentials (id, tenant_id, site_id, document_type, prefix) values (?, ?, ?, ?, ?)'
+    ).run(makeId('e2e_cent_sequence'), scenario.tenantId, scenario.site.id, 'sale', 'CENT-');
+    const manager = seedBusinessUser(db, {
+      tenantId: scenario.tenantId,
+      sites,
+      role: 'manager',
+      templateEmail: 'e2e.manager@local.test',
+      seed: normalizeSeed(seed),
+    });
+    const product = seedBusinessProduct(db, {
+      tenantId: scenario.tenantId,
+      sites,
+      unitId,
+      seed: normalizeSeed(seed),
+      siteStocks: [SITE_STOCK],
+    });
+    db.prepare('update products set price = 0.01, price2 = 0.01, price3 = 0.01 where id = ?').run(
+      product.id
+    );
+    db.prepare('update unit_x_product set price = 0.01 where product_id = ?').run(product.id);
+    db.prepare(
+      "update tenant_locale_settings set locale_override = 'en-US', currency_override = 'USD' where tenant_id = ?"
+    ).run(scenario.tenantId);
+    return {
+      tenantId: scenario.tenantId,
+      sites,
+      admin: scenario.admin,
+      manager,
+      cashier: manager,
+      product,
+    };
+  } finally {
+    db.close();
+  }
 }
 
 /**
@@ -955,7 +1097,8 @@ export function seedTransferScenario(seed: string): SeededSaleScenario {
 function seedIsolatedAdminTenant(
   seed: string,
   namespace: 'fiscal' | 'surface',
-  modules: Record<string, boolean>
+  modules: Record<string, boolean>,
+  currencyCode = 'COP'
 ): SeededFiscalProfileScenario {
   const db = openDb();
   try {
@@ -974,12 +1117,13 @@ function seedIsolatedAdminTenant(
       db.prepare(
         `insert into tenants (
           id, name, slug, settings, default_currency_code, is_active, created_at, updated_at
-        ) values (?, ?, ?, ?, 'COP', 1, ?, ?)`
+        ) values (?, ?, ?, ?, ?, 1, ?, ?)`
       ).run(
         tenantId,
         `E2E ${label} Tenant ${suffix}`,
         `e2e-${namespace}-${suffix}`,
         JSON.stringify({ modules }),
+        currencyCode,
         now,
         now
       );
@@ -1026,9 +1170,10 @@ export function seedFiscalProfileScenario(seed: string): SeededFiscalProfileScen
  */
 export function seedSurfaceGateScenario(
   seed: string,
-  modules: Record<string, boolean>
+  modules: Record<string, boolean>,
+  currencyCode?: string
 ): SeededFiscalProfileScenario {
-  return seedIsolatedAdminTenant(seed, 'surface', modules);
+  return seedIsolatedAdminTenant(seed, 'surface', modules, currencyCode);
 }
 
 /** Printer settings must never enable auto-print for another parallel checkout. */
@@ -1379,6 +1524,80 @@ export function seedCashSessionScenario(seed: string): SeededCashSessionScenario
   }
 }
 
+export interface SeededCustomerAccountScenario extends SeededSaleScenario {
+  cashSessionId: string;
+  customer: BusinessCustomer;
+  creditLimit: number;
+  owed: number;
+}
+
+/**
+ * A store-credit customer with a cupo and an opening debt; the abono itself goes
+ * through the UI. The cashier's shared open register is only read, never rewritten.
+ */
+export function seedCustomerAccountScenario(seed: string): SeededCustomerAccountScenario {
+  const scenario = seedScenario(seed);
+  const db = openDb();
+  try {
+    const cashSessionId = getOpenCashSessionId(db, scenario.cashier.id, scenario.sites[0]!.id);
+    const now = nowIso();
+    const customer: BusinessCustomer = {
+      id: makeId('e2e_account_customer'),
+      name: `E2E Fiado ${normalizeSeed(seed)} ${randomUUID().slice(0, 4)}`,
+    };
+    const creditLimit = 150_000;
+    const owed = 84_300;
+    db.transaction(() => {
+      db.prepare(
+        `insert into customers (
+           id, tenant_id, name, credit_limit, credit_limit_currency_code, created_at, updated_at
+         ) values (?, ?, ?, ?, 'COP', ?, ?)`
+      ).run(customer.id, scenario.tenantId, customer.name, creditLimit, now, now);
+      db.prepare(
+        `insert into customer_ledger_entries (
+           id, tenant_id, customer_id, occurred_at, kind, amount, note, created_at
+         ) values (?, ?, ?, ?, 'adjustment', ?, 'E2E opening balance', ?)`
+      ).run(makeId('e2e_account_ledger'), scenario.tenantId, customer.id, now, owed, now);
+    })();
+    return { ...scenario, cashSessionId, customer, creditLimit, owed };
+  } finally {
+    db.close();
+  }
+}
+
+/** The drawer movement an abono at the register wrote, joined to its ledger entry. */
+export function getTillPaymentEvidence(
+  tenantId: string,
+  cashSessionId: string,
+  customerId: string
+): { movementAmount: number; ledgerAmount: number; balance: number } | null {
+  const db = openDb();
+  try {
+    const row = db
+      .prepare(
+        `select movement.amount as movementAmount, entry.amount as ledgerAmount
+           from cash_movements movement
+           join customer_ledger_entries entry on entry.id = movement.reference_id
+          where movement.tenant_id = ? and movement.session_id = ?
+            and movement.type = 'paid_in' and entry.customer_id = ?
+          order by movement.created_at desc
+          limit 1`
+      )
+      .get(tenantId, cashSessionId, customerId) as
+      { movementAmount: number; ledgerAmount: number } | undefined;
+    if (!row) return null;
+    const { balance } = db
+      .prepare(
+        `select coalesce(sum(amount), 0) as balance
+           from customer_ledger_entries where tenant_id = ? and customer_id = ?`
+      )
+      .get(tenantId, customerId) as { balance: number };
+    return { ...row, balance };
+  } finally {
+    db.close();
+  }
+}
+
 /**
  * Seed one real open register and explicitly enable the local Customer Display
  * surface. The browser journey must still publish the cart through SalesPage;
@@ -1720,6 +1939,22 @@ export function findProductBySku(sku: string): ProductRecord | null {
       )
       .get(sku) as ProductRecord | undefined;
 
+    return row ?? null;
+  } finally {
+    db.close();
+  }
+}
+
+export function getProductPriceTiers(
+  sku: string
+): { name: string; price: number; price2: number; price3: number; cost: number } | null {
+  const db = openDb();
+
+  try {
+    const row = db
+      .prepare('select name, price, price2, price3, cost from products where sku = ? limit 1')
+      .get(sku) as
+      { name: string; price: number; price2: number; price3: number; cost: number } | undefined;
     return row ?? null;
   } finally {
     db.close();
@@ -2320,6 +2555,23 @@ export function seedReservationSaleScenario(seed: string) {
     'mobile-waiter': true,
     'pos-touch': true,
   });
+}
+
+/** One product sold by the kilogram on an isolated touch register. */
+export function seedWeighedProductScenario(seed: string) {
+  const scenario = seedFulfillmentSaleScenario(seed, { 'pos-touch': true });
+  const db = openDb();
+  try {
+    db.prepare(
+      'UPDATE products SET sell_by_fraction = 1, fraction_step = 0.001, fraction_minimum = 0.05 WHERE tenant_id = ? AND id = ?'
+    ).run(scenario.tenantId, scenario.product.id);
+    db.prepare(
+      "UPDATE units SET name = 'Kilogram', abbreviation = 'kg', dimension = 'mass', reference_factor = 1000 WHERE tenant_id = ?"
+    ).run(scenario.tenantId);
+    return scenario;
+  } finally {
+    db.close();
+  }
 }
 
 /** Fractional catalog prerequisite for external fulfillment; signed ingress and UI own all operational writes. */

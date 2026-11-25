@@ -18,6 +18,8 @@ export const PRODUCT_IMPORT_FIELDS = [
   'barcode',
   'unit',
   'price',
+  'price2',
+  'price3',
   'cost',
   'stock',
   'minStock',
@@ -46,6 +48,7 @@ export type ProductImportIssueCode =
   | 'duplicate_existing_sku'
   | 'duplicate_file_barcode'
   | 'duplicate_existing_barcode'
+  | 'invalid_check_digit'
   | 'concurrent_duplicate'
   | 'import_failed'
   | 'stock_failed';
@@ -63,6 +66,8 @@ export interface NormalizedLaunchProduct {
   unit: string | null;
   unitId: string | null;
   price: number;
+  price2: number;
+  price3: number;
   cost: number;
   stock: number;
   minStock: number;

@@ -4,13 +4,14 @@ import { EyeOff, Minus, Plus, Scale } from 'lucide-react';
 import { ModalButton } from '@/components/form-controls/Modal';
 import { Overlay } from '@/components/overlay/Overlay';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { useResolvedLocale } from '@/features/locale/LocaleProvider';
 import { useTenant } from '@/features/tenant/TenantProvider';
 import { formatCurrency, formatDateTime } from '@/lib/utils';
 import type { CashSession, CashSessionDenomination } from '@/types';
 import {
-  cashSessionTotalsMatch,
   createCashSessionDenominations,
   getCashSessionCountedTotal,
+  resolveCashSessionAmount,
 } from './cashSessionDenominations';
 import { useSingleFlightSubmit } from '@/lib/useSingleFlightSubmit';
 import { CashMovementTimeline } from './CashMovementTimeline';
@@ -25,7 +26,6 @@ const LIVE_DELTA_EPSILON = 0.009;
 export interface CashSessionCloseValues {
   actualCount: number;
   denominations: CashSessionDenomination[];
-  justification?: string;
 }
 
 interface CashSessionCloseModalProps {
@@ -47,11 +47,10 @@ interface CashSessionCloseModalProps {
   onReviewSuspended?: (() => void) | undefined;
 }
 
-function createDefaultValues(): CashSessionCloseValues {
+function createDefaultValues(currencyCode: string | undefined): CashSessionCloseValues {
   return {
     actualCount: 0,
-    denominations: createCashSessionDenominations(),
-    justification: '',
+    denominations: createCashSessionDenominations(currencyCode),
   };
 }
 
@@ -68,6 +67,8 @@ export function CashSessionCloseModal({
   const { t } = useTranslation('sales');
   const { user } = useAuth();
   const { tenantSettings } = useTenant();
+  // Until the tenant locale loads, keep the historical peso grid rather than the dollar fallback.
+  const { currency, isFallback } = useResolvedLocale();
   // tenant-level blind-close policy. Default true keeps the
   // anti-fraud control (cashiers must not see the target while counting);
   // an owner-operated tenant can opt out and show the semaphore to everyone.
@@ -82,7 +83,7 @@ export function CashSessionCloseModal({
     ? t('cashSession.closeForm.supervisedActualCount')
     : t('cashSession.closeForm.actualCount');
   const form = useForm<CashSessionCloseValues>({
-    defaultValues: createDefaultValues(),
+    defaultValues: createDefaultValues(isFallback ? undefined : currency),
   });
   const denominationFieldArray = useFieldArray({
     control: form.control,
@@ -104,23 +105,22 @@ export function CashSessionCloseModal({
   const countedTotal = hasFiniteDenominationCounts
     ? getCashSessionCountedTotal(denominations ?? [])
     : 0;
-  const isBalanced = cashSessionTotalsMatch(actualCount ?? 0, denominations ?? []);
-  const shouldShowMismatch = (actualCount ?? 0) > 0 || countedTotal > 0;
-  const mismatchMessage =
-    shouldShowMismatch && !isBalanced
-      ? t(
-          canSeeLiveDelta
-            ? 'cashSession.closeForm.supervisedMismatch'
-            : 'cashSession.closeForm.mismatch'
-        )
-      : null;
+  const usesDenominations = countedTotal > 0;
+  const closingTotal = resolveCashSessionAmount(actualCount, denominations ?? []);
   // Mirrors the confirm button's disabled expression, so the Enter path
   // cannot submit what the click path refuses.
-  const canSubmit = !isSaving && !!cashSession && !mismatchMessage;
-  const handleSubmit = form.handleSubmit(useSingleFlightSubmit(canSubmit, onSubmit));
+  const canSubmit = !isSaving && !!cashSession;
+  const handleSubmit = form.handleSubmit(
+    useSingleFlightSubmit(canSubmit, (values: CashSessionCloseValues) =>
+      onSubmit({
+        ...values,
+        actualCount: resolveCashSessionAmount(values.actualCount, values.denominations),
+      })
+    )
+  );
   const liveDelta =
     cashSession && typeof cashSession.expectedBalance === 'number' && hasFiniteDenominationCounts
-      ? countedTotal - cashSession.expectedBalance
+      ? closingTotal - cashSession.expectedBalance
       : null;
   const liveDeltaState =
     liveDelta === null
@@ -164,14 +164,12 @@ export function CashSessionCloseModal({
             className="grid grid-cols-2 items-end gap-3 text-left sm:grid-cols-3"
           >
             <div className="min-w-0">
-              <dt className="text-xs text-muted-foreground">
-                {t('cashSession.closeForm.countedTotal')}
-              </dt>
+              <dt className="text-xs text-muted-foreground">{actualCountLabel}</dt>
               <dd
                 data-testid="close-session-counted"
                 className="text-lg font-semibold tabular-nums wrap-anywhere text-ink"
               >
-                {formatCurrency(countedTotal)}
+                {formatCurrency(closingTotal)}
               </dd>
             </div>
             {canSeeLiveDelta && typeof cashSession?.expectedBalance === 'number' && (
@@ -221,7 +219,7 @@ export function CashSessionCloseModal({
             <ModalButton
               variant="primary"
               onClick={handleSubmit}
-              disabled={isSaving || !cashSession || !!mismatchMessage}
+              disabled={!canSubmit}
               className="w-auto min-w-0 flex-1 sm:min-w-[10rem] sm:flex-none"
             >
               {isSaving ? t('cashSession.closeForm.closing') : t('cashSession.closeForm.confirm')}
@@ -290,20 +288,29 @@ export function CashSessionCloseModal({
                 >
                   {actualCountLabel}
                 </label>
-                <input
-                  id="cash-session-closing-count"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  className="mt-1 h-10 w-full rounded-[10px] border border-line-strong bg-surface px-3 text-sm text-ink tabular-nums outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-400/40"
-                  {...form.register('actualCount', {
-                    valueAsNumber: true,
-                    min: {
-                      value: 0,
-                      message: t('cashSession.closeForm.actualCountRequired'),
-                    },
-                  })}
-                />
+                {usesDenominations ? (
+                  <output
+                    id="cash-session-closing-count"
+                    className="mt-1 flex h-10 w-full items-center rounded-[10px] border border-line bg-surface-2 px-3 text-sm font-semibold text-ink tabular-nums"
+                  >
+                    {formatCurrency(countedTotal)}
+                  </output>
+                ) : (
+                  <input
+                    id="cash-session-closing-count"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className="mt-1 h-10 w-full rounded-[10px] border border-line-strong bg-surface px-3 text-sm text-ink tabular-nums outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-400/40"
+                    {...form.register('actualCount', {
+                      valueAsNumber: true,
+                      min: {
+                        value: 0,
+                        message: t('cashSession.closeForm.actualCountRequired'),
+                      },
+                    })}
+                  />
+                )}
                 {form.formState.errors.actualCount && (
                   <p className="mt-1 text-xs text-danger-600">
                     {form.formState.errors.actualCount.message}
@@ -312,12 +319,6 @@ export function CashSessionCloseModal({
               </div>
             </div>
           </section>
-
-          {mismatchMessage && (
-            <p className="rounded-2xl border border-warning-500/40 bg-warning-500/15 px-3 py-2 text-[12.5px] text-warning-700">
-              {mismatchMessage}
-            </p>
-          )}
 
           <section className="space-y-3">
             <h3 className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -393,27 +394,6 @@ export function CashSessionCloseModal({
               })}
             </div>
           </section>
-
-          <section>
-            <label
-              htmlFor="cash-session-close-justification"
-              className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground"
-            >
-              {t('cashSession.closeForm.justificationLabel', {
-                defaultValue: 'Justificación (opcional)',
-              })}
-            </label>
-            <textarea
-              id="cash-session-close-justification"
-              rows={2}
-              className="mt-1.5 w-full rounded-[10px] border border-line-strong bg-surface px-3 py-2 text-[13px] text-ink outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-400/40"
-              placeholder={t('cashSession.closeForm.justificationPlaceholder', {
-                defaultValue: 'Explica cualquier sobrante o faltante…',
-              })}
-              {...form.register('justification', { maxLength: 500 })}
-            />
-          </section>
-
           {error && <p className="text-[12.5px] text-danger-600">{error}</p>}
         </form>
         {canSeeLiveDelta && cashSession && (

@@ -48,6 +48,7 @@ interface MockProduct {
 }
 
 let mockSiteId: string | null = 'site-1';
+let mockLoadingSites = false;
 let mockProducts: MockProduct[] = [];
 let mockCategories: Array<{ id: string; name: string }> = [];
 let mockCustomers: Array<{
@@ -62,6 +63,8 @@ let mockInvoiceAvailability: {
   identificationTypes: Array<{ code: string; abbr: string; nameEs: string; nameEn: string }>;
 } = { available: false, identificationTypes: [] };
 let mockActiveSession: { id: string } | null = { id: 'session-1' };
+let mockQuickKeys: Array<Record<string, unknown>> = [];
+let mockQuickKeysLoading = false;
 let mockDineInActive = true;
 let productFetchOverride: ((input: { id: string }) => Promise<Record<string, unknown>>) | null =
   null;
@@ -94,6 +97,14 @@ vi.mock('@/lib/useCriticalMutation', () => ({
 
 vi.mock('@/lib/trpc', () => ({
   trpc: {
+    quickKeys: {
+      list: {
+        useQuery: () => ({
+          data: mockQuickKeysLoading ? undefined : mockQuickKeys,
+          isLoading: mockQuickKeysLoading,
+        }),
+      },
+    },
     peripherals: {
       activeForSite: {
         useQuery: () => ({ data: [], isLoading: false, error: null }),
@@ -225,6 +236,7 @@ vi.mock('@/lib/trpc', () => ({
       },
       restaurantTables: {
         listWithDraftStatus: { invalidate: vi.fn() },
+        listSummary: { invalidate: vi.fn() },
       },
       restaurantServices: {
         getTableState: { invalidate: vi.fn() },
@@ -274,6 +286,7 @@ vi.mock('@/features/tenant/TenantProvider', () => ({
   useTenant: () => ({
     currentTenant: { id: 'tenant-1', name: 'Tenant 1' },
     currentSite: mockSiteId ? { id: mockSiteId, name: 'Site 1' } : null,
+    isLoadingSites: mockLoadingSites,
     tenantSettings: { currency: 'USD' },
   }),
 }));
@@ -289,6 +302,11 @@ vi.mock('@/hooks/useEmbeddedServerState', () => ({
 
 vi.mock('@/features/modules', () => ({
   useIsModuleActive: () => mockDineInActive,
+}));
+
+const zones = vi.hoisted(() => ({ weightValue: true }));
+vi.mock('@/features/modules/useRegisterZone', () => ({
+  useRegisterZone: (zone: string) => zone !== 'weight-value' || zones.weightValue,
 }));
 
 function makeProduct(overrides: Partial<MockProduct> = {}): MockProduct {
@@ -347,9 +365,13 @@ describe('PosTouchScreen', () => {
     vi.clearAllMocks();
     await i18next.changeLanguage('en');
     mockSiteId = 'site-1';
+    mockLoadingSites = false;
     mockActiveSession = { id: 'session-1' };
+    mockQuickKeys = [];
+    mockQuickKeysLoading = false;
     mockDineInActive = true;
     productFetchOverride = null;
+    zones.weightValue = true;
     mockCustomers = [];
     mockInvoiceAvailability = { available: false, identificationTypes: [] };
     mockProducts = [
@@ -384,6 +406,14 @@ describe('PosTouchScreen', () => {
     mockSiteId = null;
     render(<PosTouchScreen />);
     expect(screen.getByTestId('pos-touch-no-site')).toBeInTheDocument();
+    expect(screen.getByTestId('pos-touch-till-link')).toHaveAttribute('href', '/sales');
+  });
+
+  it('waits for sites instead of warning that none is active', () => {
+    mockSiteId = null;
+    mockLoadingSites = true;
+    render(<PosTouchScreen />);
+    expect(screen.queryByTestId('pos-touch-no-site')).not.toBeInTheDocument();
   });
 
   it('declares a two-track grid so the cart renders as a right rail', () => {
@@ -401,6 +431,8 @@ describe('PosTouchScreen', () => {
     expect(screen.getByTestId('pos-touch-cart-charge-hint')).toHaveTextContent(
       'Open the cash register'
     );
+    expect(screen.getByTestId('pos-touch-till-link')).toHaveAttribute('href', '/sales');
+    expect(screen.getByTestId('pos-touch-till-link')).toHaveTextContent('Till and shift');
   });
 
   it('hides voice ordering when dine-in is disabled', () => {
@@ -542,6 +574,210 @@ describe('PosTouchScreen', () => {
     const line = await screen.findByTestId('pos-touch-cart-line-p-1:p-1-unit-1');
     expect(within(line).getByText(/Arroz Diana 500g/)).toBeInTheDocument();
     expect(toastSuccess).toHaveBeenCalledWith({ title: 'Added Arroz Diana 500g to the cart' });
+  });
+
+  describe('by-weight products', () => {
+    beforeEach(() => {
+      mockProducts = [
+        makeProduct({
+          id: 'p-kg',
+          name: 'Queso costeño',
+          price: 24000,
+          price2: 24000,
+          price3: 24000,
+          sellByFraction: true,
+        }),
+      ];
+      productFetchOverride = async ({ id }) => {
+        const product = hydrateProductForTest(id);
+        const [unit] = product.unitAssignments as Array<Record<string, unknown>>;
+        return {
+          ...product,
+          fractionStep: 0.001,
+          fractionMinimum: 0.05,
+          unitAssignments: [
+            { ...unit, unitName: 'kg', unitDimension: 'mass', unitReferenceFactor: 1000 },
+          ],
+        };
+      };
+    });
+
+    it('asks how much it weighed and corrects the same line', async () => {
+      const user = userEvent.setup();
+      render(<PosTouchScreen />);
+      await user.click(screen.getByTestId('pos-touch-tile-p-kg'));
+
+      const panel = await screen.findByTestId('weighed-item-panel');
+      expect(panel).toHaveTextContent('Queso costeño · how much did it weigh?');
+      expect(screen.getByTestId('pos-touch-tile-p-kg')).toHaveAttribute('data-weighing', 'true');
+      expect(screen.queryByTestId('pos-touch-cart-line-p-kg:p-kg-unit-1')).not.toBeInTheDocument();
+
+      await user.click(screen.getByTestId('weighed-item-preset-0.25'));
+      expect(screen.getByTestId('weighed-item-readout')).toHaveTextContent('0.250 kg = $6,000');
+      await user.click(screen.getByTestId('weighed-item-preset-0.5'));
+      const line = screen.getByTestId('pos-touch-cart-line-p-kg:p-kg-unit-1');
+      expect(line).toHaveTextContent('0.5 kg');
+      expect(toastSuccess).not.toHaveBeenCalled();
+
+      await user.click(screen.getByTestId('pos-touch-cart-charge'));
+      const call = createMutate.mock.calls.at(0)?.at(0) as { items: Array<{ quantity: number }> };
+      expect(call.items).toEqual([expect.objectContaining({ quantity: 0.5 })]);
+      expect(screen.queryByTestId('weighed-item-panel')).not.toBeInTheDocument();
+    });
+
+    it('closes the panel when its line is removed', async () => {
+      const user = userEvent.setup();
+      render(<PosTouchScreen />);
+      await user.click(screen.getByTestId('pos-touch-tile-p-kg'));
+      await user.click(await screen.findByTestId('weighed-item-preset-1'));
+      await user.click(screen.getByTestId('pos-touch-cart-line-p-kg:p-kg-unit-1-remove'));
+      expect(screen.queryByTestId('weighed-item-panel')).not.toBeInTheDocument();
+    });
+
+    it('closes an untouched panel when the ticket is cleared', async () => {
+      mockProducts.push(makeProduct({ id: 'p-1', name: 'Arroz Diana 500g' }));
+      const user = userEvent.setup();
+      render(<PosTouchScreen />);
+      await user.click(screen.getByTestId('pos-touch-tile-p-1'));
+      await user.click(screen.getByTestId('pos-touch-tile-p-kg'));
+      expect(await screen.findByTestId('weighed-item-panel')).toBeInTheDocument();
+      await user.click(screen.getByTestId('pos-touch-cart-clear'));
+      expect(screen.queryByTestId('weighed-item-panel')).not.toBeInTheDocument();
+    });
+
+    it('adds the minimum as before while the weight and value zone is off', async () => {
+      zones.weightValue = false;
+      const user = userEvent.setup();
+      render(<PosTouchScreen />);
+      await user.click(screen.getByTestId('pos-touch-tile-p-kg'));
+      const line = await screen.findByTestId('pos-touch-cart-line-p-kg:p-kg-unit-1');
+      expect(line).toHaveTextContent('0.05 kg');
+      expect(screen.queryByTestId('weighed-item-panel')).not.toBeInTheDocument();
+    });
+  });
+
+  it('opens on the site keys and sells a key by tap or by amount', async () => {
+    const key = {
+      position: 0,
+      categoryId: null,
+      sellable: true,
+      unitId: null,
+      unitAbbreviation: null,
+      label: null,
+      colour: 'orange',
+    };
+    mockQuickKeys = [
+      {
+        ...key,
+        id: 'k-bread',
+        kind: 'product',
+        productId: 'p-3',
+        productName: 'Pan Bimbo',
+        productSku: 'PAN-1',
+        label: 'Pan',
+        catalogPrice: 5800,
+      },
+      {
+        ...key,
+        id: 'k-rice',
+        kind: 'open_value',
+        productId: 'p-1',
+        productName: 'Arroz Diana 500g',
+        productSku: 'ABR-0001',
+        catalogPrice: 3200,
+        position: 1,
+      },
+      { ...key, id: 'k-gone', kind: 'product', productId: 'p-9', productSku: 'X', sellable: false },
+    ];
+    const user = userEvent.setup();
+    render(<PosTouchScreen />);
+
+    expect(screen.getByTestId('pos-touch-category-quick-keys')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(screen.getByTestId('pos-touch-category-quick-keys-count')).toHaveTextContent('2');
+    expect(screen.queryByTestId('pos-touch-grid')).not.toBeInTheDocument();
+    const bread = screen.getByTestId('pos-touch-key-PAN-1-product');
+    expect(bread.querySelector('[data-colour="orange"]')).not.toBeNull();
+
+    await user.click(bread);
+    expect(await screen.findByTestId('pos-touch-cart-line-p-3:p-3-unit-1')).toBeInTheDocument();
+    expect(toastSuccess).toHaveBeenCalledWith({ title: 'Added Pan to the cart' });
+
+    await user.click(screen.getByRole('button', { name: 'Sell Arroz Diana 500g by amount' }));
+    await user.type(screen.getByTestId('sales-quick-value-amount'), '6400');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    const rice = await screen.findByTestId('pos-touch-cart-line-p-1:p-1-unit-1');
+    expect(rice).toHaveTextContent('2');
+    expect(screen.queryByTestId('sales-quick-value-form')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('pos-touch-category-all'));
+    expect(screen.getByTestId('pos-touch-grid')).toBeInTheDocument();
+    expect(screen.getByTestId('pos-touch-category-all')).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByTestId('pos-touch-category-quick-keys'));
+    expect(screen.getByTestId('pos-touch-quick-keys')).toBeInTheDocument();
+  });
+
+  it('holds the grid while the keys load, answers the keys tab mid-search and closes the amount form on charge', async () => {
+    const key = {
+      position: 0,
+      categoryId: null,
+      sellable: true,
+      unitId: null,
+      unitAbbreviation: null,
+      label: null,
+      colour: null,
+    };
+    mockQuickKeys = [
+      {
+        ...key,
+        id: 'k-bread',
+        kind: 'product',
+        productId: 'p-3',
+        productName: 'Pan Bimbo',
+        productSku: 'PAN-1',
+        catalogPrice: 5800,
+      },
+      {
+        ...key,
+        id: 'k-rice',
+        kind: 'open_value',
+        productId: 'p-1',
+        productName: 'Arroz Diana 500g',
+        productSku: 'ABR-0001',
+        catalogPrice: 3200,
+        position: 1,
+      },
+    ];
+    mockQuickKeysLoading = true;
+    const user = userEvent.setup();
+    const view = render(<PosTouchScreen />);
+    expect(screen.getByTestId('pos-touch-grid-loading')).toBeInTheDocument();
+    expect(screen.queryByTestId('pos-touch-grid')).not.toBeInTheDocument();
+
+    mockQuickKeysLoading = false;
+    view.rerender(<PosTouchScreen />);
+    await user.type(screen.getByTestId('pos-touch-search'), 'Pan');
+    // Wait for the debounced search to filter the catalog before leaving it.
+    await screen.findByTestId('pos-touch-tile-p-3');
+    await waitFor(() => expect(screen.queryByTestId('pos-touch-tile-p-1')).not.toBeInTheDocument());
+    await user.click(screen.getByTestId('pos-touch-category-quick-keys'));
+    expect(screen.getByTestId('pos-touch-quick-keys')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('pos-touch-key-PAN-1-product'));
+    await screen.findByTestId('pos-touch-cart-line-p-3:p-3-unit-1');
+    await user.click(screen.getByRole('button', { name: 'Sell Arroz Diana 500g by amount' }));
+    expect(screen.getByTestId('sales-quick-value-form')).toBeInTheDocument();
+    await user.click(screen.getByTestId('pos-touch-cart-charge'));
+    await waitFor(() => expect(createMutate).toHaveBeenCalled());
+    expect(screen.queryByTestId('sales-quick-value-form')).not.toBeInTheDocument();
+  });
+
+  it('keeps the catalog grid when the site has no keys', () => {
+    render(<PosTouchScreen />);
+    expect(screen.queryByTestId('pos-touch-category-quick-keys')).not.toBeInTheDocument();
+    expect(screen.getByTestId('pos-touch-grid')).toBeInTheDocument();
   });
 
   it('uses an adaptive high-contrast treatment for the selected price tier', () => {
@@ -733,6 +969,7 @@ describe('PosTouchScreen', () => {
     expect(screen.getByTestId('pos-touch-cart-line-p-1:p-1-unit-1-remove')).toBeDisabled();
     expect(screen.getByTestId('pos-touch-cart-clear')).toBeDisabled();
     expect(screen.getByTestId('pos-touch-voice-link')).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByTestId('pos-touch-till-link')).toHaveAttribute('aria-disabled', 'true');
     expect(createMutate).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -754,7 +991,7 @@ describe('PosTouchScreen', () => {
 });
 
 describe('PosTouchScreen — customer asked for an electronic invoice', () => {
-  const toggleName = 'Customer asked for an electronic invoice';
+  const toggleName = 'Electronic invoice';
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -799,7 +1036,7 @@ describe('PosTouchScreen — customer asked for an electronic invoice', () => {
   it('charges with the POS document and asks for no buyer data while the selector is off', async () => {
     const user = userEvent.setup();
     render(<PosTouchScreen />);
-    const toggle = await screen.findByRole('checkbox', { name: toggleName });
+    const toggle = await screen.findByRole('switch', { name: toggleName });
     expect(toggle).not.toBeChecked();
     expect(screen.queryByLabelText('Name or business name')).not.toBeInTheDocument();
 
@@ -820,7 +1057,7 @@ describe('PosTouchScreen — customer asked for an electronic invoice', () => {
     await user.click(screen.getByTestId('pos-touch-tile-p-1'));
     await screen.findByTestId('pos-touch-cart-line-p-1:p-1-unit-1');
 
-    await user.click(await screen.findByRole('checkbox', { name: toggleName }));
+    await user.click(await screen.findByRole('switch', { name: toggleName }));
     expect(screen.getByLabelText('Name or business name')).toHaveClass('min-h-[44px]');
     await user.click(screen.getByTestId('pos-touch-cart-charge'));
     expect(await screen.findAllByText('Required')).toHaveLength(2);
@@ -829,7 +1066,7 @@ describe('PosTouchScreen — customer asked for an electronic invoice', () => {
     await user.type(screen.getByLabelText('Name or business name'), '  Ferretería La 14 SAS ');
     await user.selectOptions(screen.getByLabelText('ID type'), '31');
     await user.type(screen.getByLabelText('ID number'), '900373115-3');
-    await user.type(screen.getByLabelText('Email (optional)'), ' compras@la14.co ');
+    await user.type(screen.getByLabelText('Email to send it to'), ' compras@la14.co ');
     await user.click(screen.getByTestId('pos-touch-cart-charge'));
 
     await waitFor(() => expect(createMutate).toHaveBeenCalledTimes(1));
@@ -846,9 +1083,7 @@ describe('PosTouchScreen — customer asked for an electronic invoice', () => {
       },
     });
     // The next walk-in sale must not inherit this buyer.
-    await waitFor(() =>
-      expect(screen.getByRole('checkbox', { name: toggleName })).not.toBeChecked()
-    );
+    await waitFor(() => expect(screen.getByRole('switch', { name: toggleName })).not.toBeChecked());
     expect(screen.queryByLabelText('Name or business name')).not.toBeInTheDocument();
   });
 
@@ -857,28 +1092,26 @@ describe('PosTouchScreen — customer asked for an electronic invoice', () => {
     render(<PosTouchScreen />);
     await user.click(screen.getByTestId('pos-touch-tile-p-1'));
     await screen.findByTestId('pos-touch-cart-line-p-1:p-1-unit-1');
-    await user.click(await screen.findByRole('checkbox', { name: toggleName }));
+    await user.click(await screen.findByRole('switch', { name: toggleName }));
     await user.type(screen.getByLabelText('Name or business name'), 'Ferretería La 14 SAS');
 
     await user.click(screen.getByTestId('pos-touch-cart-clear'));
 
-    expect(screen.getByRole('checkbox', { name: toggleName })).not.toBeChecked();
-    await user.click(screen.getByRole('checkbox', { name: toggleName }));
+    expect(screen.getByRole('switch', { name: toggleName })).not.toBeChecked();
+    await user.click(screen.getByRole('switch', { name: toggleName }));
     expect(screen.getByLabelText('Name or business name')).toHaveValue('');
   });
 
   it('drops the buyer when the active site changes', async () => {
     const user = userEvent.setup();
     const { rerender } = render(<PosTouchScreen />);
-    await user.click(await screen.findByRole('checkbox', { name: toggleName }));
+    await user.click(await screen.findByRole('switch', { name: toggleName }));
     await user.type(screen.getByLabelText('Name or business name'), 'Ferretería La 14 SAS');
 
     mockSiteId = 'site-2';
     rerender(<PosTouchScreen />);
 
-    await waitFor(() =>
-      expect(screen.getByRole('checkbox', { name: toggleName })).not.toBeChecked()
-    );
+    await waitFor(() => expect(screen.getByRole('switch', { name: toggleName })).not.toBeChecked());
   });
 
   it('prefills the buyer from the customer attached on the touch cart', async () => {
@@ -891,7 +1124,7 @@ describe('PosTouchScreen — customer asked for an electronic invoice', () => {
     await screen.findByTestId('pos-touch-cart-line-p-1:p-1-unit-1');
     await user.selectOptions(screen.getByLabelText('Customer'), 'cust-ana');
 
-    await user.click(await screen.findByRole('checkbox', { name: toggleName }));
+    await user.click(await screen.findByRole('switch', { name: toggleName }));
     expect(screen.getByLabelText('Name or business name')).toHaveValue('Ana Gómez');
     expect(screen.getByLabelText('ID number')).toHaveValue('1020304050');
     await user.click(screen.getByTestId('pos-touch-cart-charge'));
@@ -922,18 +1155,18 @@ describe('PosTouchScreen — customer asked for an electronic invoice', () => {
     render(<PosTouchScreen />);
     await user.click(screen.getByTestId('pos-touch-tile-p-1'));
     await screen.findByTestId('pos-touch-cart-line-p-1:p-1-unit-1');
-    await user.click(await screen.findByRole('checkbox', { name: toggleName }));
+    await user.click(await screen.findByRole('switch', { name: toggleName }));
     await user.type(screen.getByLabelText('Name or business name'), 'Ana Gómez');
     await user.type(screen.getByLabelText('ID number'), '1020304050');
     await user.click(screen.getByTestId('pos-touch-cart-charge'));
 
-    await waitFor(() => expect(screen.getByRole('checkbox', { name: toggleName })).toBeDisabled());
+    await waitFor(() => expect(screen.getByRole('switch', { name: toggleName })).toBeDisabled());
     expect(screen.getByLabelText('Name or business name')).toBeDisabled();
 
     await act(async () => {
       resolveCharge?.({ id: 'sale-invoice' });
       await Promise.resolve();
     });
-    await waitFor(() => expect(screen.getByRole('checkbox', { name: toggleName })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('switch', { name: toggleName })).toBeEnabled());
   });
 });

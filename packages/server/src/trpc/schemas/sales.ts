@@ -89,6 +89,10 @@ export const getSaleInput = z.object({
   id: z.string().min(1, 'ID is required'),
 });
 
+export const findSaleByReceiptInput = z.object({
+  code: z.string().trim().min(1).max(512),
+});
+
 /**
  * One tender applied to a sale. Split-payment sales supply an array of these;
  * single-tender sales use the legacy `paymentMethod` + `amountReceived`
@@ -543,6 +547,8 @@ export const discardDraftInput = z
     saleId: z.string().min(1, 'Sale ID is required'),
   })
   .strict();
+
+export const carryDraftOverInput = discardDraftInput;
 
 /**
  * Input for `sales.completeDraft` (). Transitions an existing

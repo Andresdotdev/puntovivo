@@ -11,7 +11,11 @@ import {
   loginAs,
   resetSession,
 } from './support/app.js';
-import { seedCashierWithoutSession, seedFiscalProfileScenario } from './support/db.js';
+import {
+  getProductPriceTiers,
+  seedCashierWithoutSession,
+  seedFiscalProfileScenario,
+} from './support/db.js';
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -49,7 +53,7 @@ async function chooseRealData(page: Page, spanish = false) {
     })
     .click();
   await expect(page.getByTestId('data-import-rollback-guidance')).toContainText(
-    spanish ? 'Crea un punto de restauración' : 'Create a restore point'
+    spanish ? 'Cree un punto de restauración' : 'Create a restore point'
   );
 }
 
@@ -64,6 +68,61 @@ async function confirmRealData(page: Page, spanish = false) {
 }
 
 test.describe('launch data import', () => {
+  test('Spanish admin imports a Windows CSV with three price levels from the Products page', async ({
+    page,
+  }, testInfo) => {
+    const tracker = attachClientIssueTracker(page);
+    const suffix = `${testInfo.parallelIndex}-${Date.now()}`;
+    const skus = ['A', 'B', 'C'].map(letter => `E2E-MONICA-${letter}-${suffix}`);
+    await loginAs(page, 'admin', { spanish: true });
+    await page.goto('/products');
+    await page.getByRole('link', { name: 'Importar productos' }).click();
+    await expect(page).toHaveURL(/\/data-import$/);
+    await chooseRealData(page, true);
+
+    // Windows-1252 bytes, as a Windows POS export writes them (latin1 covers ó and ñ).
+    await page.locator('#data-import-file').setInputFiles({
+      name: 'inventario-monica.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(
+        [
+          'Código;Nombre del producto;Costo;Precio 1;Precio 2;Precio 3',
+          `${skus[0]};Piña en almíbar ${suffix};2.100;3.000;2.800;2.650,50`,
+          `${skus[1]};Jabón de baño ${suffix};1.000;1.500;1.400;1.300`,
+          `${skus[2]};Azúcar 1 kg ${suffix};3.200;4.100;0;0`,
+        ].join('\r\n'),
+        'latin1'
+      ),
+    });
+    await expect(page.getByLabel('Formato de origen')).toHaveValue('monica-inventory-es-v1');
+    await expect(page.getByTestId('data-import-mapping-summary')).toContainText(
+      '6 columnas reconocidas'
+    );
+    await expect(page.getByTestId('data-import-mapping-warnings')).toHaveCount(0);
+    await expect(page.getByLabel(/^SKU/)).toHaveValue('Código');
+    await expect(page.getByLabel(/^Precio de venta/)).toHaveValue('Precio 1');
+    await expect(page.getByLabel(/^Precio 2/)).toHaveValue('Precio 2');
+    await expect(page.getByLabel(/^Precio 3/)).toHaveValue('Precio 3');
+    await page.getByRole('button', { name: 'Validar y previsualizar' }).click();
+    await expect(page.getByTestId('data-import-summary-ready')).toContainText('3');
+    await expect(page.getByTestId('data-import-preview-row-2')).toContainText('Piña en almíbar');
+    await expect(page.getByTestId('data-import-preview-row-2')).toContainText('2650.5');
+
+    await confirmRealData(page, true);
+    await page.getByRole('button', { name: 'Importar 3 filas listas' }).click();
+    await expect(page.getByTestId('data-import-report')).toContainText('Productos creados: 3.');
+
+    expect(getProductPriceTiers(skus[0]!)).toEqual({
+      name: `Piña en almíbar ${suffix}`,
+      cost: 2100,
+      price: 3000,
+      price2: 2800,
+      price3: 2650.5,
+    });
+    expect(getProductPriceTiers(skus[2]!)).toMatchObject({ price: 4100, price2: 0, price3: 0 });
+    await expectNoClientIssues(tracker);
+  });
+
   test('admin previews, imports, downloads a report, and sees catalog stock', async ({
     page,
   }, testInfo) => {
@@ -190,7 +249,7 @@ test.describe('launch data import', () => {
     await page.goto('/inventory');
     await page.getByRole('button', { name: 'New Entry' }).click();
     const inventoryDialog = page.getByRole('dialog', {
-      name: /Select Product for Initial Inventory/i,
+      name: /Select Product for Entry/i,
     });
     await inventoryDialog.getByPlaceholder('Search by SKU, name, or barcode').fill(serviceSku);
     await expect(
@@ -293,7 +352,7 @@ test.describe('launch data import', () => {
     await page.goto('/inventory');
     await page.getByRole('button', { name: 'Nueva entrada' }).click();
     const productSearch = page.getByRole('dialog', {
-      name: /Seleccionar producto para inventario inicial/,
+      name: /Seleccionar producto para la entrada/,
     });
     await productSearch
       .getByPlaceholder('Buscar por SKU, nombre o código de barras')
@@ -345,10 +404,10 @@ test.describe('launch data import', () => {
     await expect(page.getByTestId('data-import-summary-ready')).toContainText('1');
     await expect(page.getByTestId('data-import-summary-invalid')).toContainText('2');
     await expect(page.getByTestId('data-import-preview-row-3')).toContainText(
-      'El stock de apertura debe estar en cero cuando controlas lotes'
+      'El stock de apertura debe estar en cero cuando controla lotes'
     );
     await expect(page.getByTestId('data-import-preview-row-4')).toContainText(
-      'Usa sí/no, verdadero/falso o 1/0'
+      'Use sí/no, verdadero/falso o 1/0'
     );
     await captureEvidence(page, 'eng-110a-import-lot-validation-es');
 
@@ -381,7 +440,7 @@ test.describe('launch data import', () => {
         .getByRole('heading', { name: 'Importar datos', level: 1 })
     ).toBeVisible();
     await expect(
-      page.getByRole('heading', { name: 'Elige cómo se usará este archivo' })
+      page.getByRole('heading', { name: 'Elija cómo se usará este archivo' })
     ).toBeVisible();
     await expect(page.getByRole('button', { name: /^Productos e inventario/ })).toBeDisabled();
     await chooseRealData(page, true);
@@ -412,7 +471,7 @@ test.describe('launch data import', () => {
     await expect(report).toContainText('Importación completada');
     await expect(report).toContainText('Productos creados: 1. Registros de stock de apertura: 1.');
     await expect(page.getByTestId('data-import-report-rollback')).toContainText(
-      'restaura el respaldo cifrado'
+      'restaure el respaldo cifrado'
     );
     await expect(page.getByRole('button', { name: 'Importación completada' })).toBeDisabled();
     await captureEvidence(page, 'eng-123a-import-report-es');
@@ -668,9 +727,7 @@ test.describe('launch data import', () => {
     });
     await page.goto('/sales');
     await switchToSite(page, targetSite.name);
-    const assignmentSection = page.locator('.card-inset').filter({
-      has: page.getByText('Assigned register', { exact: true }),
-    });
+    const assignmentSection = page.getByTestId('checkout-register');
     await assignmentSection.locator('button[aria-haspopup="listbox"]').click();
     await page.getByRole('option', { name: registerName }).click();
     await page.getByRole('button', { name: 'Open cash session' }).first().click();
@@ -680,7 +737,7 @@ test.describe('launch data import', () => {
       .filter({ has: page.getByRole('heading', { name: 'Open cash session' }) })
       .last();
     await expect(openDialog.locator('#cash-session-register')).toHaveValue(registerName);
-    await expect(openDialog.locator('#cash-session-opening-float')).toHaveValue('120000');
+    await expect(openDialog.locator('#cash-session-opening-float')).toHaveText(/120[.,]000/);
     await expect(openDialog.locator('#cash-session-count-0')).toHaveValue('2');
     await expect(openDialog.locator('#cash-session-count-1')).toHaveValue('1');
     await expect(openDialog.getByRole('button', { name: 'Open session' })).toBeEnabled();
@@ -757,9 +814,7 @@ test.describe('launch data import', () => {
     await expect(numbering).toContainText('SETT 1–5000');
     await expect(numbering).toContainText('Active');
     await expect(page.locator('#fiscal-co-environment')).toHaveValue('habilitacion');
-    await expect(
-      page.getByRole('checkbox', { name: 'Enable DIAN issuing' })
-    ).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'Enable DIAN issuing' })).not.toBeChecked();
     await captureEvidence(page, 'eng-123f-fiscal-profile-company-roundtrip-en');
 
     await ensureLanguage(page, 'es');

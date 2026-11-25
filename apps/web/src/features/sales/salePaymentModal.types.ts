@@ -99,6 +99,10 @@ export interface SalePaymentValues extends ElectronicInvoiceFormValues {
    * payload-bound admin approval that the server consumes atomically.
    */
   creditOverride: boolean;
+  /** Cash paid now on a credit sale; the rest goes on the customer's account. */
+  creditDownPayment?: number | undefined;
+  /** Last digits or reference of a single transfer; it travels as that tender's reference. */
+  transferReference?: string | undefined;
   /**
    * restaurant service charge / propina sugerida. Auto
    * applied from the tenant's `serviceChargeRate` (a per-tenant
@@ -126,6 +130,9 @@ export interface SalePaymentValues extends ElectronicInvoiceFormValues {
   electronicInvoice?: { buyer: SaleElectronicInvoiceBuyer } | undefined;
 }
 
+/** A single payment method, or the split-tender mode. */
+export type InitialTender = 'cash' | 'card' | 'transfer' | 'credit' | 'split';
+
 export interface SalePaymentModalProps {
   isOpen: boolean;
   total: number;
@@ -140,6 +147,8 @@ export interface SalePaymentModalProps {
    * zero contract cost.
    */
   serviceChargeRate?: number | undefined;
+  /** Optional tenant cash-only coin rounding step (e.g. 50 in COP). */
+  cashRoundingStep?: number | null | undefined;
   /**
    * /  — caller's role drives credit-method gating.
    * Cashiers, managers, and admins can select credit with a customer;
@@ -155,6 +164,8 @@ export interface SalePaymentModalProps {
   /** Display label when the frozen customer is outside the active catalog query. */
   lockedCustomerName?: string | null | undefined;
   approvalItems?: SalePaymentQuoteItem[] | undefined;
+  /** Impoconsumo included in `total`, shown under it. */
+  consumptionTaxAmount?: number | undefined;
   approvalDiscountAmount?: number | undefined;
   /** Accepted quotations keep frozen prices and never request live promotions. */
   promotionPricingEnabled?: boolean | undefined;
@@ -168,6 +179,10 @@ export interface SalePaymentModalProps {
    * double-fires on the initial render.
    */
   fastCashTrigger?: number | undefined;
+  /** Cash handed over with the fast-cash signal; null means the exact total. */
+  fastCashAmount?: number | null | undefined;
+  /** Tender chosen on the ticket before opening; the modal starts on it. */
+  initialMethod?: InitialTender | undefined;
   /**
    * explicit cashier-flow focus target. The payment drawer
    * restores focus here after cancel, Escape, backdrop close, or a

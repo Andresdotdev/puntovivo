@@ -1,11 +1,13 @@
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { managerOrAdminRoles } from '@/features/auth/roleAccess';
+import { useSellingRoute } from '@/features/auth/useSellingRoute';
 import { CLIENT_MODULE_DEFAULTS, useModulesSnapshot } from '@/features/modules';
 import { usePrefetchSales } from '@/features/sales/usePrefetchSales';
 import { useDialogA11y } from '@/components/feedback/useDialogA11y';
@@ -28,31 +30,13 @@ interface SidebarProps {
 // links in the accessibility tree and lets the mobile drawer be a real dialog.
 const DESKTOP_SIDEBAR_QUERY = '(min-width: 1280px)';
 
-function subscribeToDesktopSidebar(onStoreChange: () => void): () => void {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return () => {};
-  }
-  const media = window.matchMedia(DESKTOP_SIDEBAR_QUERY);
-  media.addEventListener('change', onStoreChange);
-  return () => media.removeEventListener('change', onStoreChange);
-}
-
-function getDesktopSidebarSnapshot(): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
-  return window.matchMedia(DESKTOP_SIDEBAR_QUERY).matches;
-}
-
 export function Sidebar({ collapsed, mobileOpen, onToggleCollapse, onCloseMobile }: SidebarProps) {
   const { user } = useAuth();
   const { t } = useTranslation(['nav', 'workspaces']);
   const { modules, isPlaceholder } = useModulesSnapshot();
   const location = useLocation();
   const prefetchSales = usePrefetchSales();
-  const isDesktopSidebar = useSyncExternalStore(
-    subscribeToDesktopSidebar,
-    getDesktopSidebarSnapshot,
-    () => true
-  );
+  const isDesktopSidebar = useMediaQuery(DESKTOP_SIDEBAR_QUERY, true);
   const mobileDialogRef = useRef<HTMLElement>(null);
 
   // dashboard badge for high-severity AI anomalies. Keep the query
@@ -71,7 +55,13 @@ export function Sidebar({ collapsed, mobileOpen, onToggleCollapse, onCloseMobile
   );
   const dashboardBadge = anomaliesQuery.data?.severityCounts.high ?? 0;
   const workspaces = visibleWorkspacesForRole(user?.role, modules, !isPlaceholder);
-  const primaryTasks = visiblePrimaryTasksForRole(user?.role, modules, !isPlaceholder);
+  const sellingRoute = useSellingRoute().route;
+  const primaryTasks = visiblePrimaryTasksForRole(
+    user?.role,
+    modules,
+    !isPlaceholder,
+    sellingRoute
+  );
   const mobileDialogOpen = !isDesktopSidebar && mobileOpen;
 
   useDialogA11y({
@@ -93,7 +83,7 @@ export function Sidebar({ collapsed, mobileOpen, onToggleCollapse, onCloseMobile
     return (
       <aside
         className={cn(
-          'operator-sidebar fixed inset-y-0 left-0 z-50 flex min-h-0 w-[18.5rem] flex-col border-r border-line/70 px-3 py-3 backdrop-blur-2xl transition-[width] duration-300',
+          'operator-sidebar dark fixed inset-y-0 left-0 z-50 flex min-h-0 w-[18.5rem] flex-col px-3 py-3 transition-[width] duration-300',
           collapsed && 'w-[6.5rem]'
         )}
       >
@@ -135,7 +125,7 @@ export function Sidebar({ collapsed, mobileOpen, onToggleCollapse, onCloseMobile
         aria-hidden="true"
         data-testid="mobile-navigation-backdrop"
         className={cn(
-          'fixed inset-0 z-40 bg-secondary-950/35 backdrop-blur-sm transition-opacity duration-200',
+          'fixed inset-0 z-40 bg-scrim/35 backdrop-blur-sm transition-opacity duration-200',
           mobileOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
         )}
         onClick={onCloseMobile}
@@ -149,7 +139,7 @@ export function Sidebar({ collapsed, mobileOpen, onToggleCollapse, onCloseMobile
         aria-hidden={!mobileDialogOpen}
         inert={!mobileDialogOpen}
         className={cn(
-          'operator-sidebar fixed inset-y-0 left-0 z-50 flex min-h-0 w-[min(22rem,calc(100vw-1rem))] flex-col border-r border-line/70 px-3 py-3 backdrop-blur-2xl transition-transform duration-300',
+          'operator-sidebar dark fixed inset-y-0 left-0 z-50 flex min-h-0 w-[min(22rem,calc(100vw-1rem))] flex-col px-3 py-3 transition-transform duration-300',
           mobileDialogOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >

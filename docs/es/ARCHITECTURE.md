@@ -108,8 +108,12 @@ desfase de reloj, obsolescencia o estado sin conexión.
 
 El contenido de venta visible al cliente es una lista permitida: nombre mostrado
 del producto, etiqueta de unidad, cantidad, precio unitario, descuento, total de
-línea y totales de venta. Su sobre de alcance lleva necesariamente identificadores
-opacos de negocio, sede y sesión de caja, pero los identificadores de producto,
+línea y totales de venta, más la etiqueta, la cuenta y el contenido del QR del
+destino de transferencia de la tienda con el monto mientras el cajero cobra por
+transferencia. Ese bloque es la cuenta donde recibe la tienda, nunca datos de
+pago del cliente, y sale del sobre al cerrar el estado de transferencia. Su
+sobre de alcance lleva necesariamente identificadores opacos de negocio, sede
+y sesión de caja, pero los identificadores de producto,
 unidad, cliente, empleado, pago, receta, nota, stock, serial, SKU, impuesto y otros
 datos comerciales no forman parte del contrato de venta mostrado. La detección
 de cajas lee solo sobres recién publicados localmente con la capacidad exacta
@@ -146,6 +150,9 @@ conserva la pantalla activa.
   añaden alcance de sede.
 - El dinero se almacena y valida según el contrato compartido de redondeo.
 - Completar una venta exige una sesión de caja activa para negocio, sede y cajero.
+- Un relevo de caja cierra y abre cajones solo con los casos de uso de sesión de
+  caja, dentro de sus transacciones; vea
+  [ADR-0036](architecture/0036-mid-day-register-handoff.md).
 - Los recursos mutables versionados usan actualizaciones de comparación e
   intercambio e informan conflictos sin sobrescribir silenciosamente cambios
   concurrentes.
@@ -158,6 +165,11 @@ conserva la pantalla activa.
   una intención congelada de emisión dentro de la transacción de venta; el
   worker fiscal la materializa atómicamente en documento fiscal y outbox del
   proveedor antes de entregar.
+- Una transferencia cobrada con un riel de billetera real y configurado es una
+  fila de cobro en `payment_outbox` en `submitting`. La caja consulta el estado
+  al adaptador (una caja local no tiene URL pública para webhooks) y la venta
+  enlaza la fila aprobada con el pago por transferencia que lleva su
+  referencia del proveedor.
 - El reconocimiento genérico de outbox exige negocio, fila, estado de
   procesamiento y token de reclamación actual. La evidencia final fiscal/de
   entrega y el reconocimiento comparten una transacción inmediata síncrona;
@@ -398,7 +410,9 @@ devuelve todas las cuentas abiertas. Pedidos por voz y el POS tradicional exigen
 ese estado autorizado antes de abrir otra cuenta y fallan de forma segura cuando
 no está disponible. Buscar en el catálogo de mesas es un filtro literal del
 servidor aplicado antes de una paginación estable; el plano administrativo lee
-el catálogo activo completo y acotado por separado. Se rechaza crear o reactivar
+por separado el resumen acotado del salón (estado, tiempo sentado, monto,
+comensales, cuentas, ronda sin enviar, pidió la cuenta y la próxima reserva del
+día) para el catálogo activo completo. Se rechaza crear o reactivar
 más de 500 mesas activas por sede sin truncar una vista operativa. Los clientes
 heredados que crean y luego suspenden, y la migración `0058`, normalizan solo
 hechos demostrables a partir de filas ligadas a mesas aún en borrador, incluido
@@ -476,7 +490,10 @@ sede en la UI. Los recargos de cajeros requieren una referencia exacta de
 catálogo activo validada dentro de la transacción de venta; las instrucciones
 libres sin precio siguen disponibles, mientras cargos personalizados y
 adicionales restringidos requieren gerente o administrador. Editar y archivar
-el catálogo nunca reescribe pedidos aceptados.
+el catálogo nunca reescribe pedidos aceptados. Las opciones se agrupan por plato
+(preparación, sin, adicionales). Los máximos se validan dentro de la misma
+transacción; los mínimos aplican cuando el pedido envía los grupos que mostró
+(ADR-0020).
 
 ## Límite de reservas y cumplimiento externo
 

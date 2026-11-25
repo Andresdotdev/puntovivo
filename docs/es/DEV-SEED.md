@@ -141,7 +141,12 @@ Los fixtures incluyen empresa, geografía, catálogos fiscales/de identificació
 prefijos de numeración por sede, clientes, existencias, compras, cotizaciones,
 sesiones de caja y plantillas. Prefijos como `VTA-N-` y `VTA-S-` evitan colisiones
 entre secuencias de sedes sujetas a unicidad por negocio. El número real de
-ventas completadas puede variar cuando se activan controles de existencias.
+ventas completadas puede variar cuando se activan controles de existencias. Los
+productos con precio por kilogramo se venden en gramos (paso 0,001, mínimo
+0,05), y cada sede empieza con siete teclas rápidas compartidas para artículos
+sin código de barras, una de ellas por valor.
+Las sedes demo de Colombia también reciben transferencias: cada una tiene una
+llave Bre-B y un número Nequi, y la primera sede una cuenta bancaria.
 
 Mega agrega ventas, devoluciones, anulaciones, borradores, movimientos de caja
 e inventario, compras y devoluciones a proveedor, transferencias, cotizaciones,

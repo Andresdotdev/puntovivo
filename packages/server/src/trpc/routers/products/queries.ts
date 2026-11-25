@@ -48,10 +48,16 @@ import { hasPharmacyProductProfiles } from '../../../services/pharmacy/operation
 import { findExactProductMatches } from '../../../services/products/exact-search.js';
 import { findFtsProductMatches } from '../../../services/products/fts-search.js';
 import { hydrateSearchProducts } from '../../../services/products/search-hydration.js';
+import { resolveNextLotHints } from '../../../services/inventory-lots/next-lot.js';
+import { SALES_ROLES } from '@puntovivo/shared/roles';
 import {
   productStockTotalSql,
   withSiteStock,
 } from '../../../services/inventory-balances/derive.js';
+import { withSiteStockBreakdown } from '../../../services/inventory-balances/site-stock.js';
+
+const isSalesRole = (role: string | undefined) =>
+  (SALES_ROLES as readonly string[]).includes(role ?? '');
 
 function literalContains(column: AnySQLiteColumn, value: string) {
   // The compatibility fallback is a literal substring search, not an SQL
@@ -189,16 +195,20 @@ export const productQueryProcedures = {
     };
   }),
 
-  /**
-   * Active sellable products per category, so a catalog page can label its
-   * filters without downloading every product.
-   */
+  /** Products this site sold most lately, priced for a one-touch key. */
   topSelling: tenantProcedure.input(topSellingProductsInput).query(async ({ ctx, input }) => {
     await ensureTenantSite(ctx.db, ctx.tenantId, input.siteId);
     const since = new Date(Date.now() - input.days * 24 * 60 * 60 * 1000).toISOString();
     const quantity = sql<number>`sum(${saleItems.quantity} * coalesce(${saleItems.unitEquivalence}, 1))`;
     return ctx.db
-      .select({ productId: products.id, name: products.name, quantity })
+      .select({
+        productId: products.id,
+        name: products.name,
+        sku: products.sku,
+        price: products.price,
+        categoryId: products.categoryId,
+        quantity,
+      })
       .from(saleItems)
       .innerJoin(sales, eq(saleItems.saleId, sales.id))
       .innerJoin(cashSessions, eq(sales.cashSessionId, cashSessions.id))
@@ -218,13 +228,17 @@ export const productQueryProcedures = {
           eq(products.isActive, true)
         )
       )
-      .groupBy(products.id, products.name)
+      .groupBy(products.id)
       .having(sql`${quantity} >= 1`)
       .orderBy(desc(quantity))
       .limit(input.limit)
       .all();
   }),
 
+  /**
+   * Active sellable products per category, so a catalog page can label its
+   * filters without downloading every product.
+   */
   categoryCounts: tenantProcedure.query(({ ctx }) => {
     const rows = ctx.db
       .select({ categoryId: products.categoryId, count: sql<number>`count(*)` })
@@ -452,9 +466,26 @@ export const productQueryProcedures = {
       ctx.db,
       items.map(item => item.id)
     );
+    // Only the register asks for the lot it sells next, for one site and a selling role.
+    const nextLots =
+      input.includeNextLot && input.siteId && isSalesRole(ctx.user?.role)
+        ? await resolveNextLotHints(ctx.db, {
+            tenantId: ctx.tenantId,
+            siteId: input.siteId,
+            productIds: items.filter(item => item.tracksLots).map(item => item.id),
+          })
+        : null;
+
+    // Other sites' stock stays with the roles that can already see it while selling.
+    const stockedItems = isSalesRole(ctx.user?.role)
+      ? withSiteStockBreakdown(ctx.db, ctx.tenantId, input.siteId, items)
+      : withSiteStock(ctx.db, ctx.tenantId, input.siteId, items).map(item => ({
+          ...item,
+          otherSites: null,
+        }));
 
     return {
-      items: withSiteStock(ctx.db, ctx.tenantId, input.siteId, items).map(item => {
+      items: stockedItems.map(item => {
         const unitAssignments = assignmentsMap.get(item.id) ?? [];
         const baseUnit =
           unitAssignments.find(assignment => assignment.isBase) ?? unitAssignments[0];
@@ -469,6 +500,7 @@ export const productQueryProcedures = {
           baseUnitName: baseUnit?.unitName ?? null,
           baseUnitAbbreviation: baseUnit?.unitAbbreviation ?? null,
           baseUnitPrice: baseUnit?.price ?? item.price,
+          nextLot: nextLots?.get(item.id) ?? null,
         };
       }),
     };
@@ -505,7 +537,7 @@ export const productQueryProcedures = {
       ? await resolveSiteGs1ParseOptions({
           db: ctx.db,
           tenantId: ctx.tenantId,
-          siteId: ctx.siteId,
+          siteId: input.siteId ?? ctx.siteId,
         })
       : undefined;
     const parsed = parseScan(input.barcode, scannerOptions);
@@ -574,6 +606,9 @@ export const productQueryProcedures = {
             eq(unitXProduct.barcode, lookupCode)
           )
         )
+        // Deterministic tie-break when legacy data holds duplicate codes: the
+        // base presentation wins, then the lowest unit id, then product id.
+        .orderBy(desc(unitXProduct.isBase), unitXProduct.unitId, unitXProduct.productId)
         .get();
 
       if (packaging) {

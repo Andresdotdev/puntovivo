@@ -6,6 +6,7 @@ import { trpc } from '@/lib/trpc';
 import {
   invalidateCommittedGroups,
   INVENTORY_RESERVATION_INVALIDATIONS,
+  RESTAURANT_TABLE_INVALIDATIONS,
 } from '@/lib/invalidateGroups';
 import { translateServerError } from '@/lib/translateServerError';
 import { normalizeRestaurantGuestCount } from '@/features/restaurants/restaurantDraft';
@@ -35,6 +36,11 @@ export interface ResumeDraftSelection {
   tableId: string | null;
   suspendedAt: string | null;
   resumedDeviceId: string | null;
+}
+
+/** `charge` opens the payment drawer once the resumed ticket is on screen. */
+export interface ResumeOptions {
+  charge?: boolean;
 }
 
 /**
@@ -71,6 +77,8 @@ export interface UseSalesFlowsParams {
   resumeMutation: SalesMutationHandles['resumeMutation'];
   discardDraftMutation: SalesMutationHandles['discardDraftMutation'];
   openRestaurantCheckMutation: SalesMutationHandles['openRestaurantCheckMutation'];
+  /** Called after a resume asked to charge has hydrated its workspace. */
+  onResumedForCharge?: ((saleId: string) => void) | undefined;
 }
 
 /**
@@ -101,6 +109,7 @@ export function useSalesFlows({
   resumeMutation,
   discardDraftMutation,
   openRestaurantCheckMutation,
+  onResumedForCharge,
 }: UseSalesFlowsParams) {
   const { t } = useTranslation([
     'sales',
@@ -346,6 +355,7 @@ export function useSalesFlows({
         } else {
           const draft = await createMutation.mutateAsync({
             priceTier: activeWorkspace?.priceTier ?? 1,
+            customerId: activeWorkspace?.customerId ?? undefined,
             items: draftItems,
             paymentMethod: 'cash',
             paymentStatus: 'pending',
@@ -399,8 +409,7 @@ export function useSalesFlows({
         u => u.sales.list,
         u => u.sales.listDrafts,
         u => u.sales.summary,
-        u => u.restaurantTables.listWithDraftStatus,
-        u => u.restaurantServices.getTableState,
+        ...RESTAURANT_TABLE_INVALIDATIONS,
         u => u.reservations.list,
         ...INVENTORY_RESERVATION_INVALIDATIONS,
       ]);
@@ -432,7 +441,7 @@ export function useSalesFlows({
     useCartWorkspaceStore.getState().setActive(workspaceId);
   };
 
-  const handleResumeFromPanel = async (draft: ResumeDraftSelection) => {
+  const handleResumeFromPanel = async (draft: ResumeDraftSelection, options?: ResumeOptions) => {
     // A double-click on the panel row would resume the same draft twice
     // and hydrate two workspaces pointing at one serverSaleId — charging
     // both would completeDraft the same sale twice.
@@ -478,8 +487,7 @@ export function useSalesFlows({
         });
         const refreshed = await invalidateCommittedGroups(utils, [
           u => u.sales.listDrafts,
-          u => u.restaurantTables.listWithDraftStatus,
-          u => u.restaurantServices.getTableState,
+          ...RESTAURANT_TABLE_INVALIDATIONS,
         ]);
         toast.error({
           title: t('park.toastErrorTitle'),
@@ -520,10 +528,12 @@ export function useSalesFlows({
         unitId: row.unitId ?? '',
         unitName: row.unitName ?? row.unitAbbreviation ?? row.unitId ?? '',
         unitEquivalence: row.unitEquivalence ?? 1,
+        isBaseUnit: row.unitIsBase ?? undefined,
         quantity: row.quantity,
         unitPrice: row.unitPrice,
         discount: row.discount,
         taxRate: row.taxRate,
+        taxKind: row.taxKind,
         availableStock: Number.POSITIVE_INFINITY,
         // Resumed lines carry the server's flag so a service line keeps
         // its no-stock semantics through suspend and resume.
@@ -542,15 +552,16 @@ export function useSalesFlows({
         serverSaleId: resumed.id,
         serverSaleNumber: resumed.saleNumber,
         serverCustomerId: resumed.customerId ?? null,
+        serverCustomerName: resumed.customerNameSnapshot ?? resumed.customerName ?? null,
         priceTier: isPriceTier(resumed.priceTier) ? resumed.priceTier : 1,
         label,
         items,
       });
       setIsSuspendedPanelOpen(false);
+      if (options?.charge) onResumedForCharge?.(resumed.id);
       const refreshed = await invalidateCommittedGroups(utils, [
         u => u.sales.listDrafts,
-        u => u.restaurantTables.listWithDraftStatus,
-        u => u.restaurantServices.getTableState,
+        ...RESTAURANT_TABLE_INVALIDATIONS,
       ]);
       if (refreshed) {
         toast.success({ title: t('park.toastResumeTitle') });

@@ -1,7 +1,7 @@
 {
   "section": {
     "title": "Módulos",
-    "description": "Activa o desactiva módulos funcionales para tu organización. Los módulos desactivados ocultan sus pantallas y rechazan llamadas al servidor, sin borrar datos.",
+    "description": "Active o desactive módulos funcionales para su organización. Los módulos desactivados ocultan sus pantallas y rechazan llamadas al servidor, sin borrar datos.",
     "activeCount": "{{active}} de {{total}} activos"
   },
   "toggle": {
@@ -17,11 +17,11 @@
     "explicit": "Personalizado",
     "unavailable": "No disponible"
   },
-  "notActivated": "Esta función no está activa para tu organización",
+  "notActivated": "Esta función no está activa para su organización",
   "items": {
     "copilot": {
       "label": "Co-piloto",
-      "description": "Analíticas conversacionales con alcance a tu negocio. Cuando se desactiva, se oculta la pantalla de Co-piloto y el chat deja de responder."
+      "description": "Analíticas conversacionales con alcance a su negocio. Cuando se desactiva, se oculta la pantalla de Co-piloto y el chat deja de responder."
     },
     "operationsCenter": {
       "label": "Centro de Operaciones",
@@ -40,11 +40,11 @@
       "description": "Búsqueda híbrida de productos y sugerencia de categoría. Cuando se desactiva, se oculta el botón de búsqueda inteligente en Productos."
     },
     "posTouch": {
-      "label": "Superficie POS Táctil",
-      "description": "Diseño táctil del POS para tabletas. Cuando se activa, aparece en el menú lateral y carga la superficie de venta táctil."
+      "label": "POS táctil",
+      "description": "Diseño táctil del POS para tabletas. Cuando se activa, aparece en el menú lateral y carga la pantalla de venta táctil."
     },
     "kds": {
-      "label": "Superficie KDS",
+      "label": "Pantalla de cocina (KDS)",
       "description": "Pantalla de cocina a pantalla completa para el equipo de cocina. Cuando se activa, queda accesible sin afectar la pantalla de ventas."
     },
     "customerDisplay": {
@@ -65,7 +65,7 @@
     },
     "dineIn": {
       "label": "Servicio en mesa",
-      "description": "Mapa de mesas y cargo por servicio. Actívalo para un restaurante con mesas; un negocio de mostrador no lo necesita."
+      "description": "Mapa de mesas y cargo por servicio. Actívelo para un restaurante con mesas; un negocio de mostrador no lo necesita."
     },
     "companion": {
       "label": "Seguimiento en vivo",
@@ -74,18 +74,18 @@
   },
   "surfaces": {
     "intelligence": "Inteligencia",
-    "salesSurfaces": "Superficies de venta",
+    "salesSurfaces": "Pantallas de venta",
     "operations": "Operación",
     "integrations": "Integraciones"
   },
   "presets": {
-    "title": "Presets por tipo de negocio",
-    "description": "Un clic configura las superficies de caja para tu tipo de negocio. Deja los módulos de IA tal como los tengas.",
+    "title": "Configuración por tipo de negocio",
+    "description": "Un clic configura las pantallas de caja para su tipo de negocio. Deja los módulos de IA tal como los tenga.",
     "applying": "Aplicando…",
-    "applied_one": "Preset aplicado — 1 módulo cambió",
-    "applied_other": "Preset aplicado — {{count}} módulos cambiaron",
-    "noChange": "Ese preset ya está aplicado",
-    "error": "No se pudo aplicar el preset",
+    "applied_one": "Configuración aplicada — 1 módulo cambió",
+    "applied_other": "Configuración aplicada — {{count}} módulos cambiaron",
+    "noChange": "Esa configuración ya está aplicada",
+    "error": "No se pudo aplicar la configuración",
     "verticals": {
       "retail": "Tienda / minimarket",
       "restaurant": "Restaurante",
@@ -94,6 +94,28 @@
       "hardware": "Ferretería",
       "butchery": "Carnicería",
       "pharmacy": "Droguería / farmacia"
+    }
+  },
+  "zones": {
+    "title": "Zonas de la caja",
+    "zoneColumn": "Zona",
+    "ownColumn": "Su caja",
+    "on": "Encendida",
+    "off": "Apagada",
+    "requiresModule": "Requiere el módulo {{module}}",
+    "error": "No pudimos cambiar la zona",
+    "items": {
+      "command-bar": "Barra única: escanear, buscar, ordenar",
+      "quick-keys": "Teclas de un toque (sin código)",
+      "weight-value": "Vender por peso o por valor",
+      "credit": "Fiado: cupo, saldo y abono",
+      "promos-parked": "Promociones y ventas en espera",
+      "pharmacy-lot": "Lote, vencimiento y fórmula",
+      "units-cut": "Unidades, metros y corte a medida",
+      "quote-delivery": "Cotización → venta · entrega",
+      "tables": "Mesas, comensales, tiempos, cocina",
+      "tip-split": "Propina y dividir cuenta",
+      "checkout": "Total, Cobrar y novedades"
     }
   }
 }

@@ -47,6 +47,7 @@ pero nunca reasignan una tecla imprimible normal por su posición.
 | `sales.charge`           | `F1`          | Abrir pago o enviar el formulario si ya tiene el foco.            |
 | `sales.fastCash`         | `F2`          | Abrir o restablecer pago en efectivo exacto.                      |
 | `sales.productSearch`    | `F5`          | Abrir búsqueda de productos.                                      |
+| `sales.incident`         | `F9`          | Abrir o cerrar la hoja Novedad sobre la venta.                    |
 | `sales.focusProduct`     | `Alt+P`       | Enfocar búsqueda de producto/código de barras.                    |
 | `sales.focusQuantity`    | `Alt+C`       | Enfocar cantidad de la línea seleccionada.                        |
 | `sales.focusDiscount`    | `Alt+D`       | Enfocar descuento de la línea seleccionada.                       |
@@ -63,6 +64,29 @@ pero nunca reasignan una tecla imprimible normal por su posición.
 
 Los atajos de ventas y caja se limitan a admin, manager y cashier. Los controles
 de estado dejan inactivas las acciones no disponibles, sin abrir otra alternativa.
+
+Dentro de la hoja Novedad cada tarjeta tiene una letra fija en todos los idiomas:
+`D` devolución, `A` anular, `P` consultar precio, `G` agotado, `S` sin código,
+`C` precio no coincide, `M` retiro o ingreso, `R` reimprimir y `L` llamar al
+encargado. Las letras solo actúan con la cuadrícula visible y fuera de campos
+editables; `Enter` envía el reporte y `Esc` cierra.
+
+### Prefijos de la barra de la caja
+
+El campo de escaneo de `/sales` también lee una gramática corta de prefijos
+(`apps/web/src/features/sales/commandBarGrammar.ts`). Las ráfagas del escáner
+nunca pasan por ella.
+
+| Escrito      | Efecto                                                                                                                      |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `3*`         | La próxima lectura, tecla rápida o selección de búsqueda agrega tres. Decimales (`0,485*`) solo en productos fraccionables. |
+| `@text`      | Lista clientes activos (nombre, correo, teléfono o documento) para asignarlos al ticket.                                    |
+| `/text`      | Lista las acciones de caja disponibles en ese momento, cada una con su tecla.                                               |
+| texto simple | `Enter` o `F5` abre la búsqueda de productos con ese texto.                                                                 |
+
+Una etiqueta de peso conserva su propia cantidad y deja la escrita para la
+siguiente lectura. Los tickets fijados (retomados, de cotización o de cambio)
+conservan su cliente. `Mod+K` sigue siendo la paleta de toda la app.
 
 ## Colisiones y ámbito
 
@@ -88,8 +112,8 @@ los informativos o de recuperación no anuncian un atajo que no pueden ejecutar.
 
 Actualmente se aplica a navegación móvil/escritorio, acceso a la paleta,
 búsqueda y unidad de producto, pago y efectivo rápido, cantidad/descuento/
-eliminación/deshacer del carrito, suspendidos, venta nueva y apertura/
-movimientos/cierre de caja.
+eliminación/deshacer del carrito, suspendidos, venta nueva, la tecla Novedad y
+sus tarjetas con letra, y apertura/movimientos/cierre de caja.
 
 Las pruebas automáticas de accesibilidad y navegador protegen el mapeo, pero
 no sustituyen un estudio moderado de teclado ni una prueba real con Windows NVDA.

@@ -4,7 +4,9 @@ import { useToast } from '@/components/feedback/ToastProvider';
 import {
   applyPriceTier,
   getCartItemKey,
+  mergeBarcodeCartItem,
   mergeCartItem,
+  replaceCartItemUnit,
   updateCartItem,
   type SaleCartItem,
 } from '@/features/sales/saleCart';
@@ -119,6 +121,8 @@ export function useSalesCart({
     // is idempotent and only touches lines sitting on the tier grid, so
     // label-embedded and hand-edited prices survive.
     state.updateCart(activeId, applyPriceTier(next, workspace?.priceTier ?? 1));
+    // An emptied ticket starts over, so the next shopper's sale is not sent out.
+    if (next.length === 0) state.setDeliveryRequested(activeId, false);
   }, []);
   const setSelectedCartItemKey = useCallback((key: string | null) => {
     const state = useCartWorkspaceStore.getState();
@@ -139,10 +143,18 @@ export function useSalesCart({
   // handler so the "items locked" banner on the UI matches the actual
   // enforcement. If the cashier wants different items, they discard
   // the draft and start a fresh one.
-  const handleProductSelect = (selection: Parameters<typeof mergeCartItem>[1]) => {
+  /** `quantity` comes from the command bar's `N*` prefix and adds that many units. */
+  const handleProductSelect = (
+    selection: Parameters<typeof mergeCartItem>[1],
+    quantity: number | null = null
+  ) => {
     if (itemsLocked) return;
     // The setCartItems choke point applies the ticket's active tier.
-    setCartItems(currentItems => mergeCartItem(currentItems, selection));
+    setCartItems(currentItems =>
+      quantity === null
+        ? mergeCartItem(currentItems, selection)
+        : mergeBarcodeCartItem(currentItems, selection, { quantity, price: null })
+    );
     setSelectedCartItemKey(getCartItemKey(selection.product.id, selection.unit.unitId));
     setProductSearchQuery('');
     setSaleError(null);
@@ -182,6 +194,13 @@ export function useSalesCart({
     );
   };
 
+  const handleUnitChange = (itemKey: string, unitId: string) => {
+    const line = cartItems.find(item => item.key === itemKey);
+    if (itemsLocked || !line || unitId === line.unitId) return;
+    setCartItems(currentItems => replaceCartItemUnit(currentItems, itemKey, unitId));
+    setSelectedCartItemKey(getCartItemKey(line.productId, unitId));
+  };
+
   const handleSerialSelectionChange = (itemKey: string, serialIds: string[], siteId: string) => {
     // A resumed server draft already owns its serial snapshots. An accepted
     // quotation, in contrast, freezes commercial terms but deliberately does
@@ -217,6 +236,8 @@ export function useSalesCart({
     if (itemsLocked) return;
     setCartItems([]);
     setSelectedCartItemKey(null);
+    // A cleared ticket starts over, so the next shopper is not charged to the last customer.
+    if (activeWorkspace) useCartWorkspaceStore.getState().setCustomer(activeWorkspace.id, null);
   };
 
   // undo the last cart mutation on the active workspace.
@@ -264,6 +285,7 @@ export function useSalesCart({
     handleQuantityChange,
     handleDiscountChange,
     handleSerialSelectionChange,
+    handleUnitChange,
     handleRemoveItem,
     handleClearCart,
     handleUndoCart,

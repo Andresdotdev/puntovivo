@@ -1,0 +1,75 @@
+import { describe, expect, it } from 'vitest';
+import { roundMoney } from '@/lib/money';
+import { cashChange, percentOf, suggestCashTenders, applyCashKeypadKey } from './cashTender';
+
+describe('suggestCashTenders', () => {
+  it('offers the next two round bills above the total', () => {
+    expect(suggestCashTenders(87_420)).toEqual([90_000, 100_000]);
+    expect(suggestCashTenders(23_400)).toEqual([30_000, 50_000]);
+    expect(suggestCashTenders(4_500)).toEqual([5_000, 10_000]);
+    expect(suggestCashTenders(109_400)).toEqual([110_000, 150_000]);
+    expect(suggestCashTenders(12.34)).toEqual([13, 15]);
+  });
+
+  it('never repeats the exact total', () => {
+    expect(suggestCashTenders(90_000)).toEqual([100_000, 200_000]);
+    expect(suggestCashTenders(50_000)).toEqual([100_000, 200_000]);
+  });
+
+  it('returns nothing without a positive total', () => {
+    expect(suggestCashTenders(0)).toEqual([]);
+    expect(suggestCashTenders(-10)).toEqual([]);
+    expect(suggestCashTenders(Number.NaN)).toEqual([]);
+  });
+
+  it('honours the requested count', () => {
+    expect(suggestCashTenders(87_420, 1)).toEqual([90_000]);
+  });
+});
+
+describe('cashChange', () => {
+  it('matches roundMoney on the tender minus the total', () => {
+    expect(cashChange(90_000, 87_420)).toBe(2_580);
+    expect(cashChange(100_000, 87_420)).toBe(12_580);
+    expect(cashChange(20, 12.34)).toBe(roundMoney(20 - 12.34));
+    expect(cashChange(20, 12.34)).toBe(7.66);
+    expect(cashChange(0.3, 0.1)).toBe(0.2);
+  });
+
+  it('is zero for an exact or short tender', () => {
+    expect(cashChange(87_420, 87_420)).toBe(0);
+    expect(cashChange(50_000, 87_420)).toBe(0);
+  });
+});
+
+describe('percentOf', () => {
+  it('rounds the charge to cents and is zero when the rate is off', () => {
+    expect(percentOf(87_420, 10)).toBe(8_742);
+    expect(percentOf(12.35, 10)).toBe(1.24);
+    expect(percentOf(87_420, 0)).toBe(0);
+  });
+});
+
+describe('applyCashKeypadKey', () => {
+  it('replaces a preset amount, then extends what the cashier keyed', () => {
+    expect(applyCashKeypadKey(87_420, '1', true)).toBe(1);
+    expect(applyCashKeypadKey(1, '000', false)).toBe(1_000);
+    expect(applyCashKeypadKey(1_000, '0', false)).toBe(10_000);
+  });
+
+  it('deletes the last digit of whatever is showing', () => {
+    expect(applyCashKeypadKey(100_000, 'back', true)).toBe(10_000);
+    expect(applyCashKeypadKey(5, 'back', false)).toBe(0);
+    expect(applyCashKeypadKey(0, 'back', false)).toBe(0);
+  });
+
+  it('never cuts the cents off a typed decimal amount', () => {
+    expect(applyCashKeypadKey(20.5, '0', false)).toBe(0);
+    expect(applyCashKeypadKey(20.5, '5', false)).toBe(5);
+    expect(applyCashKeypadKey(20.5, 'back', false)).toBe(20);
+  });
+
+  it('stops at twelve digits', () => {
+    expect(applyCashKeypadKey(999_999_999_999, '9', false)).toBe(999_999_999_999);
+  });
+});

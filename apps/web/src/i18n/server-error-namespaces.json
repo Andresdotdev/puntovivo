@@ -23,7 +23,7 @@
     },
     {
       "namespace": "restaurants",
-      "prefixes": ["RESTAURANT_SERVICE_", "RESTAURANT_MODIFIER_"]
+      "prefixes": ["RESTAURANT_SERVICE_", "RESTAURANT_MODIFIER_", "RESTAURANT_SPLIT_"]
     },
     {
       "namespace": "promotions",
@@ -69,6 +69,14 @@
     {
       "namespace": "products",
       "prefixes": ["PRODUCT_TRACKING_REQUIRES_EMPTY_INVENTORY"]
+    },
+    {
+      "namespace": "operations",
+      "prefixes": ["TRANSFER_DESTINATION_"]
+    },
+    {
+      "namespace": "cashHandoffs",
+      "prefixes": ["CASH_HANDOFF_", "CASH_DIFFERENCE_", "SALE_CARRY_OVER_"]
     }
   ]
 }

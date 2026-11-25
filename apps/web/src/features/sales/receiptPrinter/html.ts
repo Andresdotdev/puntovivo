@@ -5,7 +5,9 @@ import i18next from 'i18next';
 import type { TFunction } from 'i18next';
 import { formatCurrency, formatDateTime } from '@/lib/utils';
 import { roundMoney } from '@/lib/money';
+import { formatSystemNote } from '@/lib/systemNotes';
 import type { SaleItem, SalePayment } from '@/types';
+import { paymentsNeedBreakdown } from '../checkoutPayment';
 import { escapeHtml } from './escape';
 import { buildFiscalSection } from './fiscal';
 import type { ReceiptSale } from './types';
@@ -31,11 +33,8 @@ function getItemDescription(item: SaleItem, t: TFunction): string {
   return `${productLabel} (${unitLabel})`;
 }
 
-function buildSplitPaymentSection(payments: SalePayment[] | undefined, t: TFunction): string {
-  // Only render a tender breakdown when the sale was actually split. A single
-  // payment row is already fully described by the existing "Payment" meta
-  // line — printing a one-row table would be noise.
-  if (!payments || payments.length <= 1) {
+function buildPaymentBreakdownSection(payments: SalePayment[] | undefined, t: TFunction): string {
+  if (!payments || !paymentsNeedBreakdown(payments)) {
     return '';
   }
 
@@ -155,7 +154,7 @@ export async function buildSaleReceiptHtml(
     ? `
       <section class="notes">
         <div class="section-label">${escapeHtml(t('receipts:fallback.notes'))}</div>
-        <p>${escapeHtml(sale.notes)}</p>
+        <p>${escapeHtml(formatSystemNote(sale.notes, t))}</p>
       </section>
     `
     : '';
@@ -447,6 +446,11 @@ export async function buildSaleReceiptHtml(
                   `
                   : ''
               }
+              ${
+                sale.roundingAdjustment
+                  ? `<div class="summary-row"><span class="muted">${escapeHtml(t('receipts:fallback.rounding'))}</span><span>${escapeHtml(formatCurrency(sale.roundingAdjustment, undefined, undefined, 2))}</span></div>`
+                  : ''
+              }
               <div class="summary-row total-row">
                 <span>${escapeHtml(t('receipts:fallback.total'))}</span>
                 <span>${escapeHtml(formatCurrency(sale.total))}</span>
@@ -456,7 +460,7 @@ export async function buildSaleReceiptHtml(
 
           ${sale.cashReceivedSnapshot != null ? `<section class="summary"><div class="summary-row"><span>${escapeHtml(t('receipts:fallback.cashReceived'))}</span><span>${escapeHtml(formatCurrency(sale.cashReceivedSnapshot))}</span></div><div class="summary-row"><span>${escapeHtml(t('receipts:fallback.change'))}</span><span>${escapeHtml(formatCurrency(sale.cashChangeSnapshot ?? 0))}</span></div></section>` : ''}
 
-          ${buildSplitPaymentSection(sale.payments, t)}
+          ${buildPaymentBreakdownSection(sale.payments, t)}
 
           ${fiscalSection}
 

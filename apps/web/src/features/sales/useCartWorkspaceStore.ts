@@ -55,6 +55,8 @@ export interface CartWorkspace {
   serverSaleNumber: string | null;
   /** Customer frozen on the resumed draft; used by checkout authorization. */
   serverCustomerId: string | null;
+  /** That customer's name, shown while the draft's customer is locked. */
+  serverCustomerName: string | null;
   /** Accepted quotation converted by this local workspace, when present. */
   sourceQuotationId: string | null;
   /** Human-readable quotation number shown in the locked-cart banner. */
@@ -65,6 +67,8 @@ export interface CartWorkspace {
   sourceQuotationCustomerId: string | null;
   /** Frozen display name used while the payment customer picker is locked. */
   sourceQuotationCustomerName: string | null;
+  /** End of the quotation's validity, shown on the locked-cart banner. */
+  sourceQuotationValidUntil: string | null;
   /** Return converted into an independent replacement sale by this workspace. */
   sourceReturnId: string | null;
   /** Original ticket number shown while composing the replacement sale. */
@@ -72,6 +76,11 @@ export interface CartWorkspace {
   /** Customer frozen by the original sale; null preserves a walk-in exchange. */
   sourceReturnCustomerId: string | null;
   sourceReturnCustomerName: string | null;
+  /** Customer the cashier attached to an editable ticket; null means walk-in. */
+  customerId: string | null;
+  customerName: string | null;
+  /** The ticket goes out as a delivery once it is charged. */
+  deliveryRequested: boolean;
   /** Operator-provided label ("Mesa 5") inherited from the server row. */
   label: string | null;
   /** first real cart interaction; null while the workspace is empty. */
@@ -174,6 +183,7 @@ interface CartWorkspaceActions {
     serverSaleId: string;
     serverSaleNumber: string;
     serverCustomerId: string | null;
+    serverCustomerName: string | null;
     priceTier: 1 | 2 | 3;
     label: string | null;
     items: SaleCartItem[];
@@ -186,6 +196,8 @@ interface CartWorkspaceActions {
     siteId: string;
     customerId: string | null;
     customerName: string | null;
+    /** Null or omitted: the quotation has no end date. */
+    validUntil?: string | null;
     priceTier: 1 | 2 | 3;
     items: SaleCartItem[];
   }): string;
@@ -200,6 +212,10 @@ interface CartWorkspaceActions {
   }): string;
   /** Remember the ticket's active price tier (repricing is the caller's job). */
   setPriceTier(id: string, tier: 1 | 2 | 3): void;
+  /** Mark or unmark the ticket to go out as a delivery once charged. */
+  setDeliveryRequested(id: string, requested: boolean): void;
+  /** Attach a customer to an editable ticket, or null for walk-in; frozen tickets are ignored. */
+  setCustomer(id: string, customer: { id: string; name: string } | null): void;
   /**
    * Purge every workspace from memory + storage. Called on logout so
    * the next user never sees the previous cashier's carts.
@@ -214,7 +230,9 @@ const PERSIST_KEY = 'cart-workspace-store';
 // migration below backfills it and cashiers who upgrade mid-shift hydrate
 // cleanly instead of hitting a runtime error. Version 2 added `historyStack`;
 // version 7 added the quotation-origin fields and `priceTier`; version 8
-// added the return-origin fields.
+// added the return-origin fields; version 9 added `serverCustomerName`; version
+// 10 added the attached `customerId` and `customerName`; version 11 added
+// `sourceQuotationValidUntil` and `deliveryRequested`.
 //
 // Adding a field WITHOUT bumping this is not a no-op: the migration is gated
 // on `fromVersion < PERSIST_VERSION`, so an already-current workspace skips it
@@ -222,7 +240,7 @@ const PERSIST_KEY = 'cart-workspace-store';
 // `sourceQuotationId` compare against null strictly, and `undefined !== null`
 // is true -- so every ordinary persisted cart would be treated as a locked
 // quotation cart and refuse edits and reuse after the upgrade.
-const PERSIST_VERSION = 8;
+const PERSIST_VERSION = 11;
 
 // Monotonic suffix so synchronous bursts of `createDraft` calls never
 // collide in environments where `crypto.randomUUID` is missing or
@@ -265,15 +283,20 @@ export const useCartWorkspaceStore = create<CartWorkspaceStore>()(
           serverSaleId: null,
           serverSaleNumber: null,
           serverCustomerId: null,
+          serverCustomerName: null,
           sourceQuotationId: null,
           sourceQuotationNumber: null,
           sourceQuotationSiteId: null,
           sourceQuotationCustomerId: null,
           sourceQuotationCustomerName: null,
+          sourceQuotationValidUntil: null,
           sourceReturnId: null,
           sourceReturnSaleNumber: null,
           sourceReturnCustomerId: null,
           sourceReturnCustomerName: null,
+          customerId: null,
+          customerName: null,
+          deliveryRequested: false,
           label: null,
           checkoutStartedAt: null,
           priceTier: 1,
@@ -415,6 +438,7 @@ export const useCartWorkspaceStore = create<CartWorkspaceStore>()(
         serverSaleId,
         serverSaleNumber,
         serverCustomerId,
+        serverCustomerName,
         priceTier,
         label,
         items,
@@ -434,6 +458,7 @@ export const useCartWorkspaceStore = create<CartWorkspaceStore>()(
                 items,
                 serverSaleNumber,
                 serverCustomerId,
+                serverCustomerName,
                 priceTier,
                 label,
                 selectedItemKey: null,
@@ -452,15 +477,20 @@ export const useCartWorkspaceStore = create<CartWorkspaceStore>()(
           serverSaleId,
           serverSaleNumber,
           serverCustomerId,
+          serverCustomerName,
           sourceQuotationId: null,
           sourceQuotationNumber: null,
           sourceQuotationSiteId: null,
           sourceQuotationCustomerId: null,
           sourceQuotationCustomerName: null,
+          sourceQuotationValidUntil: null,
           sourceReturnId: null,
           sourceReturnSaleNumber: null,
           sourceReturnCustomerId: null,
           sourceReturnCustomerName: null,
+          customerId: null,
+          customerName: null,
+          deliveryRequested: false,
           label,
           checkoutStartedAt: new Date().toISOString(),
           // Resumed drafts are price-locked; preserve the server snapshot so
@@ -487,6 +517,7 @@ export const useCartWorkspaceStore = create<CartWorkspaceStore>()(
         siteId,
         customerId,
         customerName,
+        validUntil = null,
         priceTier,
         items,
       }) {
@@ -511,15 +542,20 @@ export const useCartWorkspaceStore = create<CartWorkspaceStore>()(
           serverSaleId: null,
           serverSaleNumber: null,
           serverCustomerId: null,
+          serverCustomerName: null,
           sourceQuotationId: quotationId,
           sourceQuotationNumber: quotationNumber,
           sourceQuotationSiteId: siteId,
           sourceQuotationCustomerId: customerId,
           sourceQuotationCustomerName: customerName,
+          sourceQuotationValidUntil: validUntil,
           sourceReturnId: null,
           sourceReturnSaleNumber: null,
           sourceReturnCustomerId: null,
           sourceReturnCustomerName: null,
+          customerId: null,
+          customerName: null,
+          deliveryRequested: false,
           label: null,
           checkoutStartedAt: now,
           priceTier,
@@ -551,15 +587,20 @@ export const useCartWorkspaceStore = create<CartWorkspaceStore>()(
           serverSaleId: null,
           serverSaleNumber: null,
           serverCustomerId: null,
+          serverCustomerName: null,
           sourceQuotationId: null,
           sourceQuotationNumber: null,
           sourceQuotationSiteId: null,
           sourceQuotationCustomerId: null,
           sourceQuotationCustomerName: null,
+          sourceQuotationValidUntil: null,
           sourceReturnId: returnId,
           sourceReturnSaleNumber: saleNumber,
           sourceReturnCustomerId: customerId,
           sourceReturnCustomerName: customerName,
+          customerId: null,
+          customerName: null,
+          deliveryRequested: false,
           label: null,
           checkoutStartedAt: now,
           priceTier,
@@ -586,6 +627,42 @@ export const useCartWorkspaceStore = create<CartWorkspaceStore>()(
           }
           return {
             workspaces: { ...state.workspaces, [id]: { ...existing, priceTier: tier } },
+          };
+        });
+      },
+
+      setDeliveryRequested(id, requested) {
+        set(state => {
+          const existing = state.workspaces[id];
+          if (!existing || existing.deliveryRequested === requested) return state;
+          return {
+            workspaces: {
+              ...state.workspaces,
+              [id]: { ...existing, deliveryRequested: requested },
+            },
+          };
+        });
+      },
+
+      setCustomer(id, customer) {
+        set(state => {
+          const existing = state.workspaces[id];
+          if (
+            !existing ||
+            isTicketCustomerFrozen(existing) ||
+            existing.customerId === (customer?.id ?? null)
+          ) {
+            return state;
+          }
+          return {
+            workspaces: {
+              ...state.workspaces,
+              [id]: {
+                ...existing,
+                customerId: customer?.id ?? null,
+                customerName: customer?.name ?? null,
+              },
+            },
           };
         });
       },
@@ -632,15 +709,20 @@ export const useCartWorkspaceStore = create<CartWorkspaceStore>()(
               historyStack: workspace.historyStack ?? [],
               checkoutStartedAt: workspace.checkoutStartedAt ?? null,
               serverCustomerId: workspace.serverCustomerId ?? null,
+              serverCustomerName: workspace.serverCustomerName ?? null,
               sourceQuotationId: workspace.sourceQuotationId ?? null,
               sourceQuotationNumber: workspace.sourceQuotationNumber ?? null,
               sourceQuotationSiteId: workspace.sourceQuotationSiteId ?? null,
               sourceQuotationCustomerId: workspace.sourceQuotationCustomerId ?? null,
               sourceQuotationCustomerName: workspace.sourceQuotationCustomerName ?? null,
+              sourceQuotationValidUntil: workspace.sourceQuotationValidUntil ?? null,
               sourceReturnId: workspace.sourceReturnId ?? null,
               sourceReturnSaleNumber: workspace.sourceReturnSaleNumber ?? null,
               sourceReturnCustomerId: workspace.sourceReturnCustomerId ?? null,
               sourceReturnCustomerName: workspace.sourceReturnCustomerName ?? null,
+              customerId: workspace.customerId ?? null,
+              customerName: workspace.customerName ?? null,
+              deliveryRequested: workspace.deliveryRequested ?? false,
               priceTier: workspace.priceTier ?? 1,
             };
           }
@@ -656,6 +738,13 @@ export const useCartWorkspaceStore = create<CartWorkspaceStore>()(
 // Selectors — used by components so we can render from primitives instead of
 // subscribing to the whole state object.
 // =============================================================================
+
+/** Resumed drafts, accepted quotations and exchanges keep the customer they came with. */
+export function isTicketCustomerFrozen(
+  workspace: Pick<CartWorkspace, 'serverSaleId' | 'sourceQuotationId' | 'sourceReturnId'>
+): boolean {
+  return Boolean(workspace.serverSaleId || workspace.sourceQuotationId || workspace.sourceReturnId);
+}
 
 /** The single active workspace, or `null` if the panel is empty. */
 export function selectActiveWorkspace(state: CartWorkspaceStore): CartWorkspace | null {

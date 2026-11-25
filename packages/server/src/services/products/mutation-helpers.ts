@@ -24,6 +24,7 @@ import {
   type TaxKind,
 } from '../../db/schema.js';
 import type { DatabaseInstance } from '../../db/index.js';
+import { assertGs1CheckDigit } from './barcode-check-digit.js';
 import { roundMoney } from '../../lib/money.js';
 import type { CreateProductInput, UpdateProductInput } from '../../trpc/schemas/products.js';
 
@@ -36,7 +37,10 @@ export type ProductProviderAssignmentInput = NonNullable<CreateProductInput['pro
 export function validateUnitAssignments(
   input:
     | NonNullable<CreateProductInput['unitAssignments']>
-    | NonNullable<UpdateProductInput['unitAssignments']>
+    | NonNullable<UpdateProductInput['unitAssignments']>,
+  productBarcode?: string | null,
+  // Already-stored codes are grandfathered so an unrelated edit never fails on them.
+  previousBarcodes?: ReadonlySet<string>
 ) {
   const baseAssignments = input.filter(assignment => assignment.isBase);
 
@@ -68,6 +72,30 @@ export function validateUnitAssignments(
 
     unitIds.add(assignment.unitId);
   }
+
+  // A duplicate packaging barcode makes the scanner resolve an arbitrary row,
+  // so reject it at write time instead of relying on the read tie-break.
+  const assignedBarcodes = new Set<string>();
+  for (const assignment of input) {
+    const barcode = 'barcode' in assignment ? assignment.barcode?.trim() : undefined;
+    if (!barcode) continue;
+    if (!previousBarcodes?.has(barcode)) assertGs1CheckDigit(barcode);
+    if (assignedBarcodes.has(barcode)) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'Each packaging barcode must be unique within a product',
+      });
+    }
+    // The product barcode wins the scan lookup, so a non-base presentation
+    // sharing it would never resolve to its own unit. The base may reuse it.
+    if (!assignment.isBase && productBarcode?.trim() === barcode) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'A packaging barcode cannot equal the product barcode',
+      });
+    }
+    assignedBarcodes.add(barcode);
+  }
 }
 
 export async function resolveUnitAssignments(
@@ -75,9 +103,11 @@ export async function resolveUnitAssignments(
   tenantId: string,
   input:
     | NonNullable<CreateProductInput['unitAssignments']>
-    | NonNullable<UpdateProductInput['unitAssignments']>
+    | NonNullable<UpdateProductInput['unitAssignments']>,
+  productBarcode?: string | null,
+  previousBarcodes?: ReadonlySet<string>
 ) {
-  validateUnitAssignments(input);
+  validateUnitAssignments(input, productBarcode, previousBarcodes);
 
   const availableUnits = await db
     .select({

@@ -44,6 +44,7 @@ import {
   companies,
   countries,
   customers,
+  customerLedgerEntries,
   departments,
   fiscalCafs,
   fiscalCertificates,
@@ -74,6 +75,8 @@ import {
 import { appRouter } from '../trpc/router.js';
 import type { Context } from '../trpc/context.js';
 import { createReceiptTemplate } from '../services/receipt-templates.js';
+import { setSiteQuickKey } from '../services/site-quick-keys.js';
+import { setSiteTransferDestination } from '../services/site-transfer-destinations.js';
 import { getProductStockTotal } from '../services/inventory-balances.js';
 import type { ReceiptLayout } from '../trpc/schemas/receiptTemplates.js';
 import { registerDevice as registerDeviceService } from '../services/devices/devicesService.js';
@@ -100,6 +103,16 @@ const FISCAL_TEMPLATE_NAME = 'Documento equivalente electrónico — 80mm';
  * exactly what to type at the login screen.
  */
 export const DEV_USER_PASSWORD = 'Admin123!Dev';
+
+const DEV_QUICK_KEYS: ReadonlyArray<readonly [string, 'product' | 'open_value', string | null]> = [
+  ['Pan Francés', 'product', null],
+  ['Empanada de carne', 'product', null],
+  ['Croissant', 'product', null],
+  ['Buñuelo', 'product', null],
+  ['Arepa Paisa x5', 'product', null],
+  ['Chicharrón 500g', 'product', null],
+  ['Carne de res molida 500g', 'open_value', 'Carne molida'],
+];
 
 export interface SeedDevOptions {
   /**
@@ -722,6 +735,8 @@ export async function seedDevData(
   for (const profile of buildCustomerFixtures(target.customerTarget)) {
     const id = nanoid();
     customerRows.push({ id, name: profile.name });
+    // Amounts are pesos, so only the Colombian fixture opens store credit.
+    const account = countryCode === 'CO' ? DEMO_CREDIT_ACCOUNTS[profile.name] : undefined;
     await db
       .insert(customers)
       .values({
@@ -742,11 +757,29 @@ export async function seedDevData(
         clientTypeId: null,
         commercialActivityId: null,
         notes: null,
+        creditLimit: account?.creditLimit ?? 0,
+        creditLimitCurrencyCode: account ? 'COP' : null,
         isActive: true,
         createdAt: now,
         updatedAt: now,
       })
       .run();
+    if (account) {
+      await db
+        .insert(customerLedgerEntries)
+        .values({
+          id: nanoid(),
+          tenantId,
+          customerId: id,
+          kind: 'adjustment',
+          amount: account.owed,
+          note: 'Saldo inicial',
+          createdBy: adminUser.id,
+          occurredAt: now,
+          createdAt: now,
+        })
+        .run();
+    }
   }
 
   // ----- 10. Products (with unit assignments + initial stock per site) ----
@@ -804,6 +837,47 @@ export async function seedDevData(
       layout: layout.layout,
       isActive: true,
       createdBy: adminUser.id,
+    });
+  }
+
+  // ----- 11b. Shared quick keys for items sold without a barcode ----------
+  for (const site of siteRows) {
+    for (const [name, kind, label] of DEV_QUICK_KEYS) {
+      const product = productRows.find(row => row.name === name);
+      if (!product) continue;
+      setSiteQuickKey(
+        db,
+        { tenantId, siteId: site.id, userId: adminUser.id },
+        { kind, productId: product.id, label }
+      );
+    }
+  }
+
+  // ----- 11c. Where each Colombian demo site receives transfers ------------
+  if (countryCode === 'CO') {
+    siteRows.forEach((site, index) => {
+      const scope = { tenantId, siteId: site.id, userId: adminUser.id };
+      const holderName = 'Demo Retail Colombia';
+      setSiteTransferDestination(db, scope, {
+        kind: 'bre_b',
+        account: `@demoretail${index + 1}`,
+        holderName,
+      });
+      setSiteTransferDestination(db, scope, {
+        kind: 'nequi',
+        account: `30055501${String(index).padStart(2, '0')}`,
+        holderName,
+      });
+      if (index === 0) {
+        setSiteTransferDestination(db, scope, {
+          kind: 'bank_account',
+          account: '000123456789',
+          bankName: 'Banco Demo',
+          accountType: 'savings',
+          holderName,
+          holderId: '900123456',
+        });
+      }
     });
   }
 
@@ -1230,6 +1304,13 @@ interface DevCustomerProfile {
   idTypeCode: 'CC' | 'NIT' | 'CE' | 'PA' | 'TI';
   personTypeCode: 'natural' | 'juridica';
 }
+
+/** Store-credit accounts a corner store and a hardware store would carry. */
+const DEMO_CREDIT_ACCOUNTS: Record<string, { creditLimit: number; owed: number }> = {
+  'Juan Pérez': { creditLimit: 150_000, owed: 84_300 },
+  'Carlos Rodríguez': { creditLimit: 100_000, owed: 92_000 },
+  'Ferretería La 13 S.A.S.': { creditLimit: 5_000_000, owed: 2_180_000 },
+};
 
 function buildCustomerFixtures(target = 30): DevCustomerProfile[] {
   const naturalNames = [
@@ -1931,6 +2012,8 @@ async function insertProductRow(
     defaultProviderId,
   } = args;
   const baseUnitId = unitIds[def.baseUnit]!;
+  // Goods priced per kilogram are weighed, so they sell in grams.
+  const weighed = def.baseUnit === 'KG';
   // Cost → price margin math is computed upstream in the service; for
   // the seed we store the raw cost and let margin fields stay 0 so
   // the product edit page shows an honest "no margin configured" state
@@ -1967,9 +2050,9 @@ async function insertProductRow(
       // Stock is derived from Σ(inventory_balances.on_hand); this seed
       // populates inventory_balances directly (see seedInitialBalances).
       minStock: 5,
-      sellByFraction: false,
-      fractionStep: null,
-      fractionMinimum: null,
+      sellByFraction: weighed,
+      fractionStep: weighed ? 0.001 : null,
+      fractionMinimum: weighed ? 0.05 : null,
       barcode: def.barcode,
       imageUrl: null,
       isActive: true,
@@ -2526,7 +2609,7 @@ function buildDefaultReceiptLayouts(): Record<
           { type: 'separator' },
           { type: 'tendersTable', showChange: true },
           { type: 'separator' },
-          { type: 'text', value: 'Gracias por tu compra', align: 'center', style: 'muted' },
+          { type: 'text', value: 'Gracias por su compra', align: 'center', style: 'muted' },
           // pass 1 (item #5) — Puntovivo-branded footer block.
           // Admins can toggle `show: false` to hide without deleting.
           { type: 'appFooter', show: true, align: 'center' },

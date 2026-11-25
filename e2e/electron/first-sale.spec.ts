@@ -118,7 +118,7 @@ test.describe('first sale on the desktop app', () => {
 
     // Step 3 — sell the product and charge it.
     await page
-      .getByRole('button', { name: /search products|buscar productos/i })
+      .getByRole('button', { name: /^(search|buscar)$/i })
       .first()
       .click();
     const searchDialog = page.getByRole('dialog', { name: /add product|agregar producto/i });
@@ -147,17 +147,18 @@ test.describe('first sale on the desktop app', () => {
     ).toBeVisible({ timeout: 15_000 });
     await captureEvidence(page, 'first-sale-3-celebration');
 
-    // The desktop renderer exposes the same explicit customer handoff as web:
+    // The finished-sale strip owns the receipt until the next ticket. The desktop
+    // renderer exposes the same explicit customer handoff as web:
     // the operator reviews the immutable receipt, then chooses WhatsApp. The
     // app neither selects a recipient nor sends in the background.
     await expect(celebration).toBeHidden({ timeout: 7_000 });
-    await page.getByTestId('sales-open-last-receipt').click();
+    await page.getByTestId('sale-complete-receipt').click();
     const receiptDialog = page.getByRole('dialog', { name: /sale|venta/i });
     await expect(receiptDialog).toBeVisible();
     await receiptDialog.getByRole('button', { name: /share receipt|compartir recibo/i }).click();
     const sharePanel = receiptDialog.getByTestId('receipt-share-panel');
     await expect(sharePanel).toContainText(
-      /does not choose the contact or send the message|no elige el contacto ni envía el mensaje/i
+      /You send it from your WhatsApp|Usted lo envía desde su WhatsApp/i
     );
     await expect(
       sharePanel.getByRole('link', { name: /open whatsapp|abrir whatsapp/i })

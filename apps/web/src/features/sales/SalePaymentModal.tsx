@@ -13,11 +13,16 @@
  * @module features/sales/SalePaymentModal
  */
 import { lazy, Suspense } from 'react';
+import { useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 
 import { Drawer } from '@/components/feedback/Drawer';
-import { ModalButton } from '@/components/form-controls/Modal';
+import { Button } from '@/components/ui';
+import { useResolvedLocale } from '@/features/locale/LocaleProvider';
+import { getCartArticleCount } from '@/features/sales/saleCartTotals';
+import { ariaKeyshortcutsFor, shortcutDisplayFor } from '@/lib/shortcuts';
 import { formatCurrency } from '@/lib/utils';
+import { CashChangeHero } from './CashChangeHero';
 import { TENDER_SUM_EPSILON } from './salePaymentModal.constants';
 import { SaleElectronicInvoiceSection } from './LazySaleElectronicInvoiceSection';
 import { asElectronicInvoiceForm } from './electronicInvoiceRequest';
@@ -33,6 +38,11 @@ const SalePaymentSplitTenderSection = lazy(async () => {
 const SalePaymentSingleTenderSection = lazy(async () => {
   const module = await import('./SalePaymentSingleTenderSection');
   return { default: module.SalePaymentSingleTenderSection };
+});
+
+const SalePaymentTransferSection = lazy(async () => {
+  const module = await import('./SalePaymentTransferSection');
+  return { default: module.SalePaymentTransferSection };
 });
 
 const SalePharmacyEvidenceSection = lazy(async () => {
@@ -64,10 +74,12 @@ export type {
 export function SalePaymentModal({
   isOpen,
   total,
+  consumptionTaxAmount = 0,
   customers,
   isSaving,
   error,
   serviceChargeRate = 0,
+  cashRoundingStep = null,
   userRole,
   approvalSaleId = null,
   approvalCustomerId = null,
@@ -78,6 +90,8 @@ export function SalePaymentModal({
   promotionPricingEnabled = true,
   currencyCode = 'COP',
   fastCashTrigger = 0,
+  fastCashAmount = null,
+  initialMethod = 'cash',
   restoreFocusTo,
   activePriceTier = 1,
   allowTip = true,
@@ -86,6 +100,8 @@ export function SalePaymentModal({
   onSubmit,
 }: SalePaymentModalProps) {
   const { t } = useTranslation(['sales', 'promotions', 'common']);
+  const { currencySymbol } = useResolvedLocale();
+  const itemCount = getCartArticleCount(approvalItems);
   const {
     form,
     tenderFields,
@@ -94,12 +110,15 @@ export function SalePaymentModal({
     serviceChargeAmount,
     tipAmount,
     grandTotal,
+    roundingAdjustment,
     amountReceivedValue,
     change,
     outstanding,
     paymentMethod,
     isCash,
     isCredit,
+    isTransfer,
+    transferReferenceValid,
     isAdmin,
     creditMethodAvailable,
     selectedCustomer,
@@ -119,7 +138,11 @@ export function SalePaymentModal({
     loyaltyValuePerPoint,
     storeCreditBalance,
     retryCustomerValue,
-    creditAmountInSplit,
+    creditDownPayment,
+    creditDownPaymentInvalid,
+    creditProjectionAmount,
+    payableExcess,
+    payExcess,
     currentBalance,
     creditLimit,
     projectedBalance,
@@ -132,6 +155,7 @@ export function SalePaymentModal({
     pharmacyCheckout,
     tenderSum,
     tenderDelta,
+    offUnitTender,
     splitIsValid,
     canSubmit,
     handleSubmit,
@@ -146,6 +170,7 @@ export function SalePaymentModal({
     customers,
     isSaving,
     serviceChargeRate,
+    cashRoundingStep,
     userRole,
     approvalSaleId,
     approvalCustomerId,
@@ -156,22 +181,79 @@ export function SalePaymentModal({
     currencyCode,
     activePriceTier,
     fastCashTrigger,
+    fastCashAmount,
+    initialMethod,
     onSubmit,
   });
 
   const isPartialPayment = !splitMode && !isCredit && outstanding > 0;
-  const showsBalance = isPartialPayment || !isCash;
+  const invoiceRequested =
+    useWatch({ control: form.control, name: 'invoiceRequested' }) === true &&
+    electronicInvoice.available;
+  const confirmLabel = (): string => {
+    if (isSaving) return t('payment.processing');
+    if (offUnitTender) return t('payment.confirmWholeAmounts');
+    if (isPartialPayment) {
+      return t('payment.confirmPartialAmount', { amount: formatCurrency(outstanding) });
+    }
+    if (splitMode && Math.abs(tenderDelta) >= TENDER_SUM_EPSILON) {
+      return t(tenderDelta < 0 ? 'payment.confirmSplitMissing' : 'payment.confirmSplitOver', {
+        amount: formatCurrency(Math.abs(tenderDelta)),
+      });
+    }
+    if (isCredit && !splitMode && !creditDownPaymentInvalid) {
+      const credit = formatCurrency(creditProjectionAmount);
+      return creditDownPayment > 0
+        ? t('payment.confirmCreditWithCash', { credit, cash: formatCurrency(creditDownPayment) })
+        : t('payment.confirmCredit', { credit });
+    }
+    if (isTransfer) {
+      return t(invoiceRequested ? 'payment.confirmTransferInvoice' : 'payment.confirmTransfer');
+    }
+    return invoiceRequested ? t('payment.confirmInvoice') : t('payment.confirm');
+  };
+
+  const confirmSale = () => {
+    void handleSubmit();
+  };
+
+  const totalDetail = [
+    ...(serviceChargeAmount > 0 || tipAmount > 0
+      ? [t('payment.consumption', { amount: formatCurrency(checkoutBaseTotal) })]
+      : []),
+    // Promotions reprice lines after the cart computed its tax.
+    ...(consumptionTaxAmount > 0 && promotionDiscountAmount === 0
+      ? [t('payment.consumptionTaxIncluded', { amount: formatCurrency(consumptionTaxAmount) })]
+      : []),
+    ...(roundingAdjustment !== 0
+      ? [
+          t('payment.rounding', {
+            amount: formatCurrency(roundingAdjustment, undefined, undefined, 2),
+          }),
+        ]
+      : []),
+  ];
 
   const paymentSummary = (
-    <div
-      className="rounded-xl border border-primary-200 bg-primary-50 px-4 py-4 shadow-sm"
-      data-testid="sale-payment-summary"
-    >
-      <p id="sale-payment-total-label" className="text-sm text-primary-800">
-        {t('payment.saleTotal')}
+    <div className="sale-pay-summary" data-testid="sale-payment-summary">
+      {allowTip && (
+        <Suspense fallback={<div className="min-h-[4.75rem]" aria-hidden="true" />}>
+          <SalePaymentTipSection
+            form={form}
+            baseTotal={checkoutBaseTotal}
+            tipAmount={tipAmount}
+            presetActive={presetActive}
+            handleTipPreset={handleTipPreset}
+            syncPaymentInputsForTip={syncPaymentInputsForTip}
+          />
+        </Suspense>
+      )}
+      <p className="sales-cap">
+        <span id="sale-payment-total-label">{t('payment.saleTotal')}</span>
+        {itemCount > 0 && ` · ${t('sell.total.items', { count: itemCount })}`}
       </p>
       <p
-        className="mt-1 text-3xl font-semibold text-primary-900"
+        className="sale-pay-total-figure"
         role="status"
         aria-live="polite"
         aria-atomic="true"
@@ -179,50 +261,24 @@ export function SalePaymentModal({
       >
         {formatCurrency(grandTotal)}
       </p>
-      {/* breakdown line picks one of three i18n keys so
-        the renderer never interpolates "+ servicio $0.00" when the
-        tenant has no rate configured. Tip-only matches the original
-         copy; service-only and service-with-tip add the
-        extra segment in neutral LATAM tú.
-      */}
-      {serviceChargeAmount > 0 && tipAmount > 0 && (
-        <p className="mt-1 text-xs text-primary-700">
-          {t('payment.serviceCharge.grandTotalBreakdownWithTip', {
-            base: formatCurrency(checkoutBaseTotal),
-            service: formatCurrency(serviceChargeAmount),
-            tip: formatCurrency(tipAmount),
-          })}
-        </p>
-      )}
-      {serviceChargeAmount > 0 && tipAmount === 0 && (
-        <p className="mt-1 text-xs text-primary-700">
-          {t('payment.serviceCharge.grandTotalBreakdownOnly', {
-            base: formatCurrency(checkoutBaseTotal),
-            service: formatCurrency(serviceChargeAmount),
-          })}
-        </p>
-      )}
-      {serviceChargeAmount === 0 && tipAmount > 0 && (
-        <p className="mt-1 text-xs text-primary-700">
-          {t('payment.tip.grandTotalBreakdown', {
-            base: formatCurrency(checkoutBaseTotal),
-            tip: formatCurrency(tipAmount),
-          })}
+      {totalDetail.length > 0 && (
+        <p className="mt-1 text-xs text-secondary-600" data-testid="sale-payment-total-detail">
+          {totalDetail.join(' · ')}
         </p>
       )}
       {promotionQuoteLoading && (
-        <p className="mt-2 text-xs text-primary-700" role="status">
+        <p className="mt-2 text-xs text-secondary-600" role="status">
           {t('promotions:checkout.calculating')}
         </p>
       )}
       {!promotionQuoteLoading && promotionDiscountAmount > 0 && (
-        <div className="mt-2 border-t border-primary-200 pt-2" data-testid="promotion-summary">
+        <div className="mt-2 border-t border-line pt-2" data-testid="promotion-summary">
           <p className="text-sm font-medium text-success-700">
             {t('promotions:checkout.saved', {
               amount: formatCurrency(promotionDiscountAmount, currencyCode),
             })}
           </p>
-          <p className="mt-0.5 text-xs text-primary-700">
+          <p className="mt-0.5 text-xs text-secondary-600">
             {appliedPromotions.map(promotion => promotion.name).join(' · ')}
           </p>
         </div>
@@ -241,58 +297,38 @@ export function SalePaymentModal({
       pinnedContent={paymentSummary}
       footer={
         <div className="w-full space-y-3">
-          {!splitMode && !isCredit && (
-            <dl
-              data-testid="payment-settlement"
-              className="grid grid-cols-2 items-end gap-3 text-left"
-            >
-              <div className="min-w-0">
-                <dt className="text-xs text-secondary-500">{t('payment.amountReceived')}</dt>
-                <dd className="text-base font-medium tabular-nums wrap-anywhere text-secondary-900 sm:text-lg">
-                  {formatCurrency(amountReceivedValue)}
-                </dd>
-              </div>
-              <div className="min-w-0">
-                <dt className="text-xs text-secondary-500">
-                  {showsBalance ? t('payment.balance') : t('payment.change')}
-                </dt>
-                <dd
-                  data-testid="payment-settlement-amount"
-                  className={`text-xl font-semibold tabular-nums wrap-anywhere sm:text-2xl ${
-                    isPartialPayment ? 'text-warning-700' : 'text-success-700'
-                  }`}
-                >
-                  {formatCurrency(showsBalance ? outstanding : change)}
-                </dd>
-              </div>
-            </dl>
+          {!splitMode && !isCredit && (isCash || isPartialPayment) && (
+            <CashChangeHero change={change} outstanding={outstanding} currencyCode={currencyCode} />
           )}
-          <div className="flex gap-3 sm:justify-end">
-            <ModalButton onClick={onClose} disabled={isSaving} className="w-auto shrink-0">
-              {t('payment.cancel')}
-            </ModalButton>
-            <ModalButton
-              variant="primary"
+          <div className="flex gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              className="sale-pay-back"
+              onClick={onClose}
+              disabled={isSaving}
+            >
+              {t('payment.back')}
+              <kbd className="pv-kbd" aria-hidden="true">
+                Esc
+              </kbd>
+            </Button>
+            <Button
+              type="button"
+              variant="charge"
+              className="sales-charge-key sale-pay-confirm"
               onClick={handleSubmit}
               disabled={!canSubmit}
               id="sale-payment-confirm"
-              className="w-auto min-w-0 flex-1 disabled:bg-secondary-200 disabled:text-secondary-500 sm:flex-none"
+              aria-keyshortcuts={ariaKeyshortcutsFor('sales.charge')}
             >
-              {isSaving
-                ? t('payment.processing')
-                : isPartialPayment
-                  ? t('payment.confirmPartialAmount', { amount: formatCurrency(outstanding) })
-                  : splitMode && Math.abs(tenderDelta) >= TENDER_SUM_EPSILON
-                    ? t(
-                        tenderDelta < 0
-                          ? 'payment.confirmSplitMissing'
-                          : 'payment.confirmSplitOver',
-                        {
-                          amount: formatCurrency(Math.abs(tenderDelta)),
-                        }
-                      )
-                    : t('payment.confirm')}
-            </ModalButton>
+              {confirmLabel()}
+              {canSubmit && !isSaving && (
+                <kbd className="sales-charge-kbd" aria-hidden="true">
+                  {shortcutDisplayFor('sales.charge')}
+                </kbd>
+              )}
+            </Button>
           </div>
         </div>
       }
@@ -339,9 +375,30 @@ export function SalePaymentModal({
               creditMethodAvailable={creditMethodAvailable}
               isCash={isCash}
               isCredit={isCredit}
+              isTransfer={isTransfer}
               grandTotal={grandTotal}
               amountReceivedValue={amountReceivedValue}
+              currencySymbol={currencySymbol}
               handleEnableSplit={handleEnableSplit}
+            />
+          </Suspense>
+        )}
+
+        {isTransfer && (
+          <Suspense
+            fallback={
+              <p className="text-sm text-secondary-500" role="status">
+                {t('common:status.loading')}
+              </p>
+            }
+          >
+            <SalePaymentTransferSection
+              form={form}
+              grandTotal={grandTotal}
+              referenceValid={transferReferenceValid}
+              canSubmit={canSubmit}
+              isSaving={isSaving}
+              onConfirm={confirmSale}
             />
           </Suspense>
         )}
@@ -376,6 +433,35 @@ export function SalePaymentModal({
           </Suspense>
         )}
 
+        {showCreditCard && (
+          <Suspense
+            fallback={
+              <p className="text-sm text-secondary-500" role="status">
+                {t('common:status.loading')}
+              </p>
+            }
+          >
+            <SaleCreditCustomerCard
+              form={form}
+              selectedCustomer={selectedCustomer}
+              splitMode={splitMode}
+              creditAmount={creditProjectionAmount}
+              creditDownPaymentInvalid={creditDownPaymentInvalid}
+              payableExcess={payableExcess}
+              onPayExcess={payExcess}
+              currencySymbol={currencySymbol}
+              currentBalance={currentBalance}
+              creditLimit={creditLimit}
+              projectedBalance={projectedBalance}
+              cupoExceeded={cupoExceeded}
+              isAdmin={isAdmin}
+              balanceLoading={balanceLoading}
+              balanceUnavailable={balanceUnavailable}
+              retryBalance={retryBalance}
+            />
+          </Suspense>
+        )}
+
         <div>
           <div className="sm:grid sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-center sm:gap-3">
             <label htmlFor="sale-payment-customer" className="label">
@@ -388,13 +474,18 @@ export function SalePaymentModal({
               {...form.register('customerId')}
             >
               <option value="">{t('payment.walkIn')}</option>
-              {approvalCustomerId &&
-                !customers.some(customer => customer.id === approvalCustomerId) && (
-                  <option value={approvalCustomerId}>
-                    {lockedCustomerName ?? t('payment.lockedCustomer')}
-                  </option>
-                )}
-              {customers.map(customer => (
+              {/* One keyed list, so the chosen option survives the customer list loading. */}
+              {(approvalCustomerId &&
+              !customers.some(customer => customer.id === approvalCustomerId)
+                ? [
+                    {
+                      id: approvalCustomerId,
+                      name: lockedCustomerName ?? t('payment.lockedCustomer'),
+                    },
+                    ...customers,
+                  ]
+                : customers
+              ).map(customer => (
                 <option key={customer.id} value={customer.id}>
                   {customer.name}
                 </option>
@@ -432,41 +523,7 @@ export function SalePaymentModal({
               form={asElectronicInvoiceForm(form)}
               identificationTypes={electronicInvoice.identificationTypes}
               selectedCustomer={selectedCustomer}
-            />
-          </Suspense>
-        )}
-
-        {/* V10 credit-sale customer card. Shows the
-            customer's current balance, cupo, projected balance
-            after this sale, and either an admin override checkbox or
-            an exact approval request for non-admin operators
-            when the projection exceeds the cupo.  lifted
-            this out of the !splitMode branch so it surfaces in
-            both modes: legacy single-tender credit projects against
-            grandTotal; split-credit ("apartado") projects against
-            the credit-tender sum only. */}
-        {showCreditCard && (
-          <Suspense
-            fallback={
-              <p className="text-sm text-secondary-500" role="status">
-                {t('common:status.loading')}
-              </p>
-            }
-          >
-            <SaleCreditCustomerCard
-              form={form}
-              selectedCustomer={selectedCustomer}
-              splitMode={splitMode}
-              creditAmountInSplit={creditAmountInSplit}
-              grandTotal={grandTotal}
-              currentBalance={currentBalance}
-              creditLimit={creditLimit}
-              projectedBalance={projectedBalance}
-              cupoExceeded={cupoExceeded}
-              isAdmin={isAdmin}
-              balanceLoading={balanceLoading}
-              balanceUnavailable={balanceUnavailable}
-              retryBalance={retryBalance}
+              savedCustomers={customers}
             />
           </Suspense>
         )}
@@ -481,6 +538,11 @@ export function SalePaymentModal({
           onRefresh={() => {
             void checkoutApprovals.refetch();
           }}
+          requestBlockedReason={
+            isTransfer && !transferReferenceValid
+              ? t('payment.transferQr.approvalNeedsReference')
+              : undefined
+          }
         />
 
         {pharmacyCheckout.enabled && (
@@ -506,25 +568,6 @@ export function SalePaymentModal({
               onToggleEvidence={pharmacyCheckout.toggleEvidence}
               onEvidenceApproved={pharmacyCheckout.selectEvidence}
               onRefetch={pharmacyCheckout.refetch}
-            />
-          </Suspense>
-        )}
-
-        {allowTip && (
-          <Suspense
-            fallback={
-              <div
-                className="min-h-24 motion-safe:animate-pulse rounded-xl border border-secondary-200 bg-surface-2/50"
-                role="status"
-                aria-label={t('common:status.loading')}
-              />
-            }
-          >
-            <SalePaymentTipSection
-              form={form}
-              presetActive={presetActive}
-              handleTipPreset={handleTipPreset}
-              syncPaymentInputsForTip={syncPaymentInputsForTip}
             />
           </Suspense>
         )}

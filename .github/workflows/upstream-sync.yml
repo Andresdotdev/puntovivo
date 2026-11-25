@@ -1,0 +1,53 @@
+name: Upstream sync
+
+# Keeps this fork's `main` aligned with the owner's repository, and reports how
+# far each working branch is behind. It never merges into a branch that has an
+# open pull request: that history is what the maintainer is reviewing.
+
+on:
+  schedule:
+    # 11:00 UTC is 06:00 in Colombia.
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out this fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Merge the owner's main into this fork's main
+        run: |
+          git config user.name 'upstream-sync'
+          git config user.email 'actions@users.noreply.github.com'
+          git remote add upstream https://github.com/johnny4young/puntovivo.git
+          git fetch upstream main --quiet
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "already up to date with upstream/main"
+            exit 0
+          fi
+          git merge --no-edit upstream/main
+          git push origin HEAD:main
+
+      - name: Report how far each branch is behind
+        run: node scripts/check-upstream-sync.mjs --no-fetch
+
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo '### Upstream sync'
+            echo ''
+            echo '`main` was fast-forwarded or merged from `johnny4young/puntovivo`.'
+            echo 'Working branches were reported only — nothing was merged into them.'
+          } >> "$GITHUB_STEP_SUMMARY"

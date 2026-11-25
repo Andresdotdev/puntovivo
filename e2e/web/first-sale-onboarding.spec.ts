@@ -45,7 +45,7 @@ test.describe('first sale onboarding', () => {
       const guide = page.getByTestId('first-sale-guide');
       await expect(guide.getByText('Your first sale in 5 minutes')).toBeVisible();
       await expect(guide.getByText('0 of 3 steps completed')).toBeVisible();
-      await expect(page.getByText("Today's sales").first()).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText('Sold today').first()).toBeVisible({ timeout: 15_000 });
       await captureEvidence(page, 'first-sale-0-fresh-en');
 
       await guide.getByRole('link', { name: 'Create product' }).click();
@@ -100,7 +100,7 @@ test.describe('first sale onboarding', () => {
       await dismissVisibleToasts(page);
       await captureEvidence(page, 'first-sale-2-register-open-en');
 
-      await page.getByRole('button', { name: 'Search products' }).first().click();
+      await page.getByRole('button', { name: 'Search', exact: true }).first().click();
       const searchDialog = page.getByRole('dialog', { name: 'Add product' });
       await expect(searchDialog).toBeVisible();
       await searchDialog.getByRole('textbox', { name: 'Search' }).fill(productSku);
@@ -115,7 +115,7 @@ test.describe('first sale onboarding', () => {
       // proves the backtracking counter rather than merely asserting its shape.
       await page.getByRole('button', { name: `Remove ${productName}` }).click();
       await expect(page.getByTestId(`sale-cart-item-${productSku}`)).toHaveCount(0);
-      await page.getByRole('button', { name: 'Search products' }).first().click();
+      await page.getByRole('button', { name: 'Search', exact: true }).first().click();
       const secondSearchDialog = page.getByRole('dialog', { name: 'Add product' });
       await secondSearchDialog.getByRole('textbox', { name: 'Search' }).fill(productSku);
       const secondProductRow = secondSearchDialog.getByTestId(`product-search-row-${productSku}`);
@@ -144,7 +144,7 @@ test.describe('first sale onboarding', () => {
       await expect(page.getByTestId('first-sale-guide')).toBeHidden();
       await openUserMenu(page);
       await page.getByRole('button', { name: 'Guía de primera venta' }).click();
-      await expect(page.getByText('Tu primera venta en 5 minutos')).toBeVisible();
+      await expect(page.getByText('Su primera venta en 5 minutos')).toBeVisible();
       await expect(page.getByText('3 de 3 pasos completados')).toBeVisible();
       await captureEvidence(page, 'first-sale-help-reopen-es');
 

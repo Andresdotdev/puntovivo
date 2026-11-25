@@ -29,8 +29,8 @@
       "fallbackLabel": "todas las sedes"
     },
     "ordersToday": {
-      "title": "Pedidos de hoy",
-      "fallbackLabel": "completados hoy"
+      "title": "Número de ventas hoy",
+      "fallbackLabel": "completadas hoy"
     },
     "lowStockAlerts": {
       "title": "Alertas de stock bajo",
@@ -50,7 +50,7 @@
     "chartLabel": "Gráfico de ingresos diarios de los últimos 30 días",
     "empty": "Aún no hay ingresos para representar.",
     "periodTotal": "Total del periodo",
-    "periodOrders": "Pedidos del periodo",
+    "periodOrders": "Ventas del periodo",
     "bestDay": "Mejor día"
   },
   "recentSales": {
@@ -68,7 +68,7 @@
   "lowStock": {
     "kicker": "Reposición",
     "title": "Stock bajo",
-    "description": "Prioriza estas referencias antes de que afecten la venta.",
+    "description": "Priorice estas referencias antes de que afecten la venta.",
     "empty": "Sin productos con stock bajo por ahora.",
     "minimum": "Mínimo {{count}}",
     "alertCount_one": "{{count}} alerta de stock",
@@ -77,8 +77,116 @@
   },
   "unitsSold_one": "{{count}} unidad vendida",
   "unitsSold_other": "{{count}} unidades vendidas",
-  "ordersCount_one": "{{count}} pedido",
-  "ordersCount_other": "{{count}} pedidos",
+  "ordersCount_one": "{{count}} venta",
+  "ordersCount_other": "{{count}} ventas",
   "stockCount_one": "{{count}} en stock",
-  "stockCount_other": "{{count}} en stock"
+  "stockCount_other": "{{count}} en stock",
+  "today": {
+    "loading": "Cargando el día",
+    "title": "{{date}}",
+    "status": {
+      "ready": "DIAN al día",
+      "fiscalPending": "DIAN por corregir"
+    },
+    "sold": "Vendido hoy",
+    "salesContext_one": "sobre el {{weekday}} pasado · {{count}} venta · ticket {{ticket}}",
+    "salesContext_other": "sobre el {{weekday}} pasado · {{count}} ventas · ticket {{ticket}}",
+    "expand": "Ampliar el día",
+    "collapse": "Reducir el día",
+    "band": {
+      "opening": "Apertura",
+      "peak": "Hora pico",
+      "peakNow": "Hora pico · ahora",
+      "handoff": "Relevo",
+      "summary": "Ventas de hoy {{total}} frente a {{comparison}} el mismo día de la semana pasada",
+      "tableCaption": "Ventas por hora, hoy y el mismo día de la semana pasada",
+      "hour": "Hora",
+      "todayColumn": "Hoy",
+      "comparisonColumn": "Semana pasada"
+    },
+    "arc": {
+      "summary": "Día de {{opening}} a {{close}}, {{percent}} % transcurrido"
+    },
+    "pending": {
+      "title": "Pendiente",
+      "filterLabel": "Filtrar pendientes",
+      "filters": {
+        "all": "Todo",
+        "mine": "Mío · {{count}}",
+        "cashiers": "Cajeros · {{count}}"
+      },
+      "empty": "No hay nada pendiente. El día puede cerrarse.",
+      "severity": {
+        "blocks": "Bloquea el cierre",
+        "beforeClose": "Antes de cerrar",
+        "whenPossible": "Cuando pueda"
+      },
+      "approval": "{{label}} {{amount}} espera su aprobación",
+      "agoNow": "hace un momento",
+      "ago": "hace {{duration}}",
+      "staleSession": "{{register}} sigue abierta desde {{time}}",
+      "staleSessionDetail": "{{cashier}} · no se puede firmar el día hasta contarla",
+      "incident": {
+        "stockout": "{{product}} agotado",
+        "price_mismatch": "{{product}}: el precio de góndola no coincide",
+        "no_barcode": "Producto sin código: {{product}}",
+        "call_manager": "{{reporter}} lo llama a la caja"
+      },
+      "incidentReporter": "Lo reportó {{reporter}}",
+      "incidentReason": {
+        "not_on_shelf": "No hay en góndola",
+        "system_zero": "El sistema dice 0",
+        "expired": "Vencido"
+      },
+      "incidentShelfPrice": "góndola {{price}}",
+      "incidentSystemPrice": "sistema {{price}}",
+      "elsewhere": "{{site}} tiene {{count}}",
+      "attention": {
+        "sync_one": "{{count}} elemento de sincronización necesita atención",
+        "sync_other": "{{count}} elementos de sincronización necesitan atención",
+        "fiscal_one": "{{count}} documento de la DIAN por corregir",
+        "fiscal_other": "{{count}} documentos de la DIAN por corregir",
+        "device_one": "{{count}} impresión o apertura de cajón falló",
+        "device_other": "{{count}} impresiones o aperturas de cajón fallaron",
+        "payments_one": "{{count}} pago necesita revisión",
+        "payments_other": "{{count}} pagos necesitan revisión"
+      },
+      "attentionDetail": "Reinténtelo o revíselo en Operaciones",
+      "actions": {
+        "approve": "Aprobar",
+        "reject": "Rechazar",
+        "countAndClose": "Contar y cerrar",
+        "transfer": "Trasladar {{count}}",
+        "resolve": "Resolver",
+        "fix": "Corregir",
+        "review": "Revisar"
+      },
+      "resolveError": "No se pudo resolver la novedad"
+    },
+    "registers": {
+      "title": "Cajas",
+      "open": "Abrir caja",
+      "empty": "No hay cajas abiertas.",
+      "name": "{{register}} · {{cashier}}",
+      "selling": "vendiendo",
+      "waiting": "espera el {{rank}}",
+      "isItem": "es el {{rank}}",
+      "openSince": "Abierta desde {{time}}, sin contar",
+      "sales_one": "{{count}} venta",
+      "sales_other": "{{count}} ventas",
+      "salesAndHandoff_one": "{{count}} venta · entrega {{time}}",
+      "salesAndHandoff_other": "{{count}} ventas · entrega {{time}}",
+      "nextIn": "Sigue en",
+      "durationHours": "{{hours}} h {{minutes}} min",
+      "durationMinutes": "{{minutes}} min",
+      "handoff": "Relevo de {{register}}: entrega {{from}}",
+      "handoffTo": "Relevo de {{register}}: {{from}} entrega a {{to}}",
+      "received": "Relevo hecho {{time}} · lo entregó {{from}}",
+      "receivedDifference": "Relevo hecho {{time}} · {{difference}} contra el conteo de {{from}}",
+      "handedOver": "{{register}} · entregada",
+      "handedOverBy": "La entregó {{from}} a las {{time}}",
+      "waitingFor": "espera a {{to}}",
+      "waitingAnyone": "por recibir"
+    }
+  }
 }

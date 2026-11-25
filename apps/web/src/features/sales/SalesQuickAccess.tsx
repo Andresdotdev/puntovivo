@@ -1,132 +1,150 @@
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { keepPreviousData } from '@tanstack/react-query';
-import { FilePlus2, LoaderCircle, Percent, Search, Settings2, Star } from 'lucide-react';
+import { LoaderCircle, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { MAX_SITE_QUICK_KEYS } from '@puntovivo/shared/quick-keys';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { useDiscountSuggestions } from '@/features/sales/useDiscountSuggestions';
-import { selectionFromHydratedProduct } from '@/features/sales/productSelection';
+import { QuickKeyValueForm } from '@/features/sales/QuickKeyValueForm';
 import {
-  MAX_SALES_FAVORITES,
+  clearSalesFavoriteIds,
   readDismissedSuggestions,
   readSalesFavoriteIds,
   writeDismissedSuggestions,
-  toggleSalesFavoriteId,
-  writeSalesFavoriteIds,
 } from '@/features/sales/salesFavorites';
+import {
+  productTile,
+  useQuickTileSelection,
+  useSiteQuickKeys,
+  type QuickTile,
+} from '@/features/sales/siteQuickKeys';
+import { useRegisterZone } from '@/features/modules/useRegisterZone';
+import { onErrorToast } from '@/lib/mutationHelpers';
 import { formatCurrency } from '@/lib/utils';
-import { ariaKeyshortcutsFor } from '@/lib/shortcuts';
 import { trpc } from '@/lib/trpc';
-import type { Product, ProductSearchSelection } from '@/types';
+import type { ProductSearchSelection } from '@/types';
+import { usePhoneLayout } from './usePhoneLayout';
+
+const SiteQuickKeysEditor = lazy(() =>
+  import('@/features/sales/SiteQuickKeysEditor').then(module => ({
+    default: module.SiteQuickKeysEditor,
+  }))
+);
 
 interface SalesQuickAccessProps {
   scopeKey: string;
   siteId: string;
-  hasCartItems: boolean;
-  canFocusDiscount: boolean;
-  lastCompletedSaleId?: string | null;
-  onOpenLastReceipt?: () => void;
-  onSelectProduct: (selection: ProductSearchSelection) => void;
-  onOpenSearch: () => void;
-  onFocusDiscount: () => void;
-  onNewSale: () => void;
+  /** Managers and admins choose the site's keys; cashiers only use them. */
+  canEdit?: boolean;
+  /** Mid-sale the strip stays quiet: no favourite suggestion. */
+  hasCartItems?: boolean;
+  onSelectProduct: (selection: ProductSearchSelection, quantity?: number) => void;
 }
-
-// The register boot only shows suggested tiles; the wider catalog is for the favorites editor.
-const SUGGESTION_CATALOG_SIZE = 12;
-const EDITOR_CATALOG_SIZE = 80;
 
 export function SalesQuickAccess({
   scopeKey,
   siteId,
-  hasCartItems,
-  canFocusDiscount,
-  lastCompletedSaleId = null,
-  onOpenLastReceipt,
+  canEdit = false,
+  hasCartItems = false,
   onSelectProduct,
-  onOpenSearch,
-  onFocusDiscount,
-  onNewSale,
 }: SalesQuickAccessProps) {
-  const { t } = useTranslation(['salesQuickAccess', 'sales', 'receiptShare']);
+  const { t } = useTranslation('salesQuickAccess');
   const toast = useToast();
   const utils = trpc.useUtils();
-  const [configuredIds, setConfiguredIds] = useState<string[] | null>(() =>
-    readSalesFavoriteIds(scopeKey)
-  );
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [loadingProductId, setLoadingProductId] = useState<string | null>(null);
-  const shouldLoadCatalog = !hasCartItems && siteId.length > 0;
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [loadingKey, setLoadingKey] = useState<string | null>(null);
+  const [valueTile, setValueTile] = useState<QuickTile | null>(null);
+  const [legacyIds] = useState(() => readSalesFavoriteIds(scopeKey));
+  const enabled = siteId.length > 0;
+  const resolveSelection = useQuickTileSelection(siteId);
+  // Phones show the keys as one row of chips between the search and the ticket.
+  const asChips = usePhoneLayout();
 
-  const productsQuery = trpc.products.list.useQuery(
-    { page: 1, perPage: isEditing ? EDITOR_CATALOG_SIZE : SUGGESTION_CATALOG_SIZE, isActive: true },
-    { enabled: shouldLoadCatalog, staleTime: 60_000, placeholderData: keepPreviousData }
-  );
-  const categoriesQuery = trpc.categories.tree.useQuery(undefined, {
-    enabled: shouldLoadCatalog,
-    staleTime: 60_000,
+  const { query: keysQuery, keys, tiles: siteTiles } = useSiteQuickKeys(siteId);
+  // «Valor…» keys belong to the sell-by-weight-or-value zone.
+  const sellsByValue = useRegisterZone('weight-value');
+  const keyTiles = sellsByValue ? siteTiles : siteTiles.filter(tile => tile.kind !== 'open_value');
+  const importMutation = trpc.quickKeys.importLocal.useMutation({
+    onSuccess: list => {
+      clearSalesFavoriteIds(scopeKey);
+      utils.quickKeys.list.setData({ siteId }, list);
+    },
+  });
+  const setMutation = trpc.quickKeys.set.useMutation({
+    onSuccess: list => utils.quickKeys.list.setData({ siteId }, list),
+    onError: onErrorToast(toast, t, { titleKey: 'saveFailed' }),
   });
 
-  const favoriteQueries = trpc.useQueries(t =>
-    (shouldLoadCatalog ? [...new Set(configuredIds ?? [])].slice(0, MAX_SALES_FAVORITES) : []).map(
-      id => t.products.getById({ id, siteId }, { staleTime: 60_000, retry: false })
-    )
-  );
-  const products = useMemo<Product[]>(() => {
-    const byId = new Map<string, Product>();
-    for (const item of [
-      ...(productsQuery.data?.items ?? []),
-      ...favoriteQueries.flatMap(query => (query.data ? [query.data] : [])),
-    ]) {
-      if (!item.isActive || item.catalogType === 'variant_parent') continue;
-      byId.set(item.id, {
-        ...item,
-        isActive: item.isActive ?? false,
-        syncStatus: item.syncStatus ?? undefined,
-        syncVersion: item.syncVersion ?? undefined,
-      } as Product);
-    }
-    return [...byId.values()];
-  }, [productsQuery.data, favoriteQueries]);
+  const needsImport = keysQuery.isSuccess && keys.length === 0 && (legacyIds?.length ?? 0) > 0;
+  const { mutate: importLocal, isIdle: importIdle, isPending: importing } = importMutation;
+  useEffect(() => {
+    if (needsImport && importIdle) importLocal({ siteId, productIds: legacyIds ?? [] });
+  }, [importIdle, importLocal, legacyIds, needsImport, siteId]);
+  // A site that already has keys never imports, so its old local favourites go now.
+  const siteHasKeys = keys.length > 0;
+  useEffect(() => {
+    if (siteHasKeys && legacyIds) clearSalesFavoriteIds(scopeKey);
+  }, [legacyIds, scopeKey, siteHasKeys]);
+
+  // Keys of retired products are hidden, so a site with only those still gets suggestions.
+  const showsKeys = keyTiles.length > 0;
+  // An import that settles with no usable favourite leaves the site empty, so the fallback shows then too.
+  const importSettled = !importIdle && !importing;
+  const showsFallback = keysQuery.isSuccess && !showsKeys && (!needsImport || importSettled);
   const topSellingQuery = trpc.products.topSelling.useQuery(
-    { siteId },
-    { enabled: shouldLoadCatalog, staleTime: 5 * 60_000 }
+    { siteId, limit: MAX_SITE_QUICK_KEYS },
+    {
+      enabled: enabled && (showsFallback || (!asChips && canEdit && showsKeys && !hasCartItems)),
+      staleTime: 5 * 60_000,
+    }
   );
+  const productsQuery = trpc.products.list.useQuery(
+    { page: 1, perPage: MAX_SITE_QUICK_KEYS, isActive: true },
+    {
+      enabled: enabled && showsFallback,
+      staleTime: 60_000,
+      placeholderData: keepPreviousData,
+    }
+  );
+  const categoriesQuery = trpc.categories.tree.useQuery(undefined, {
+    enabled: enabled && !asChips && !hasCartItems,
+    staleTime: 60_000,
+  });
   const [dismissedSuggestions, setDismissedSuggestions] = useState(() =>
     readDismissedSuggestions(scopeKey)
   );
-  const favoritesLoading = favoriteQueries.some(query => query.isLoading);
-  // A favorite that no longer resolves drops out like an inactive one; retrying cannot restore it.
-  const favoritesError = favoriteQueries.some(
-    query => query.isError && query.error?.data?.code !== 'NOT_FOUND'
-  );
-  const categories = categoriesQuery.data?.items ?? [];
-  const suggestedIds = useMemo(
-    () => products.slice(0, Math.min(6, MAX_SALES_FAVORITES)).map(product => product.id),
-    [products]
-  );
-  const selectedIds = configuredIds ?? suggestedIds;
-  const filteredProducts = activeCategoryId
-    ? products.filter(product => product.categoryId === activeCategoryId)
-    : products;
-  const visibleProducts = isEditing
-    ? [...filteredProducts]
-        .sort((a, b) => Number(selectedIds.includes(b.id)) - Number(selectedIds.includes(a.id)))
-        .slice(0, 24)
-    : filteredProducts
-        .filter(product => selectedIds.includes(product.id))
-        .sort((a, b) => selectedIds.indexOf(a.id) - selectedIds.indexOf(b.id))
-        .slice(0, MAX_SALES_FAVORITES);
-  const discountSuggestions = useDiscountSuggestions(
-    shouldLoadCatalog && visibleProducts.length > 0,
-    siteId
+
+  // Without keys the strip offers what this site sells most, topped up from the catalog.
+  const fallbackTiles = useMemo(() => {
+    const sellers = (topSellingQuery.data ?? []).map(item =>
+      productTile({ ...item, id: item.productId })
+    );
+    const sellerIds = new Set(sellers.map(tile => tile.productId));
+    const catalog = (productsQuery.data?.items ?? [])
+      .filter(item => item.isActive && item.catalogType !== 'variant_parent')
+      .map(productTile)
+      .filter(tile => !sellerIds.has(tile.productId));
+    return [...sellers, ...catalog].slice(0, MAX_SITE_QUICK_KEYS);
+  }, [productsQuery.data, topSellingQuery.data]);
+  const productKeyIds = useMemo(
+    () => new Set(keys.flatMap(key => (key.kind === 'product' ? [key.productId] : []))),
+    [keys]
   );
 
+  // Mid-sale the category chips are hidden, so a filter picked earlier must not linger.
+  const categoryFilter = hasCartItems ? null : activeCategoryId;
+  const visibleTiles = (showsKeys ? keyTiles : fallbackTiles).filter(
+    tile => !categoryFilter || tile.categoryId === categoryFilter
+  );
+  const discountSuggestions = useDiscountSuggestions(enabled && visibleTiles.length > 0, siteId);
+
+  // The fallback already shows the top sellers, so the banner waits for the site's own keys.
   const suggestion =
-    selectedIds.length < MAX_SALES_FAVORITES
+    !asChips && canEdit && showsKeys && !hasCartItems && keys.length < MAX_SITE_QUICK_KEYS
       ? topSellingQuery.data?.find(
           item =>
-            !selectedIds.includes(item.productId) && !dismissedSuggestions.includes(item.productId)
+            !productKeyIds.has(item.productId) && !dismissedSuggestions.includes(item.productId)
         )
       : undefined;
   const dismissSuggestion = (productId: string) => {
@@ -135,123 +153,56 @@ export function SalesQuickAccess({
     writeDismissedSuggestions(scopeKey, next);
   };
 
-  const persistSelection = (productId: string) => {
-    const base = configuredIds ?? suggestedIds;
-    const next = toggleSalesFavoriteId(base, productId);
-    setConfiguredIds(next);
-    writeSalesFavoriteIds(scopeKey, next);
-  };
-
-  const handleProductAction = async (product: Product) => {
-    if (isEditing) {
-      persistSelection(product.id);
-      return;
-    }
-
-    setLoadingProductId(product.id);
+  const addTile = async (tile: QuickTile) => {
+    setLoadingKey(tile.key);
     try {
-      // The favorite lookups share this cache entry; the cart must use the current product.
-      const hydrated = await utils.products.getById.fetch(
-        { id: product.id, siteId },
-        { staleTime: 0 }
-      );
-      const selection = selectionFromHydratedProduct(hydrated as unknown as Product);
-      if (!selection) {
-        toast.error({ title: t('noSaleUnit') });
-        return;
-      }
-      onSelectProduct(selection);
-      toast.success({ title: t('added', { name: product.name }) });
+      const selection = await resolveSelection(tile);
+      if (selection) onSelectProduct(selection);
+      else toast.error({ title: t('noSaleUnit') });
     } catch {
       toast.error({ title: t('addFailed') });
     } finally {
-      setLoadingProductId(null);
+      setLoadingKey(null);
     }
   };
 
-  if (hasCartItems) {
-    return (
-      <div
-        className="mb-4 flex flex-wrap items-center gap-2 rounded-[12px] border border-line/70 bg-surface-2/55 p-2"
-        aria-label={t('safeActions')}
-        data-testid="sales-context-actions"
-      >
-        <button
-          type="button"
-          className="btn-outline"
-          onClick={onOpenSearch}
-          aria-keyshortcuts={ariaKeyshortcutsFor('sales.productSearch')}
-        >
-          <Search className="h-4 w-4" aria-hidden="true" />
-          {t('searchAnother')}
-        </button>
-        {canFocusDiscount && (
-          <button
-            type="button"
-            className="btn-outline"
-            onClick={onFocusDiscount}
-            aria-keyshortcuts={ariaKeyshortcutsFor('sales.focusDiscount')}
-          >
-            <Percent className="h-4 w-4" aria-hidden="true" />
-            {t('adjustDiscount')}
-          </button>
-        )}
-        <button
-          type="button"
-          className="btn-ghost"
-          onClick={onNewSale}
-          aria-keyshortcuts={ariaKeyshortcutsFor('sales.newSale')}
-        >
-          <FilePlus2 className="h-4 w-4" aria-hidden="true" />
-          {t('sales:park.newSale')}
-        </button>
-      </div>
-    );
-  }
+  const handleTile = (tile: QuickTile) => {
+    if (tile.kind === 'open_value') setValueTile(tile);
+    else void addTile(tile);
+  };
+
+  const categories = categoriesQuery.data?.items ?? [];
+  const isLoading =
+    keysQuery.isLoading ||
+    importing ||
+    (showsFallback && (topSellingQuery.isLoading || productsQuery.isLoading));
 
   return (
     <section
-      className="sales-quick-access mb-4 rounded-[14px] border border-line/70 bg-surface-2/55 p-3"
+      className="sales-quick-access lg:shrink-0"
       aria-labelledby="sales-quick-access-title"
       data-testid="sales-quick-access"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-primary-800">
-            {configuredIds === null ? t('suggestedKicker') : t('favoritesKicker')}
-          </p>
-          <h3 id="sales-quick-access-title" className="mt-1 text-base font-semibold text-fg1">
-            {t('title')}
-          </h3>
-          <p className="mt-0.5 text-xs text-fg2">{t('description')}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {lastCompletedSaleId && onOpenLastReceipt && (
-            <button
-              type="button"
-              className="btn-outline"
-              onClick={onOpenLastReceipt}
-              data-testid="sales-open-last-receipt"
-            >
-              {t('receiptShare:lastReceipt')}
-            </button>
-          )}
+      <div className={asChips ? 'sr-only' : 'flex min-h-9 items-center justify-between gap-3'}>
+        <h3 id="sales-quick-access-title" className="sales-cap">
+          {t('barTitle')}
+        </h3>
+        {canEdit && !asChips && (
           <button
             type="button"
-            className="btn-ghost"
-            onClick={() => setIsEditing(value => !value)}
-            aria-pressed={isEditing}
+            className="sales-quick-choose"
+            onClick={() => setIsEditorOpen(true)}
+            aria-haspopup="dialog"
             data-testid="sales-favorites-edit"
           >
-            <Settings2 className="h-4 w-4" aria-hidden="true" />
-            {isEditing ? t('finishEditing') : t('configure')}
+            {t('choose')}
           </button>
-        </div>
+        )}
       </div>
 
       {suggestion && (
         <div
-          className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm text-primary-900"
+          className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-accent px-3 py-1.5 text-sm text-accent-foreground"
           data-testid="sales-quick-suggestion"
         >
           <p className="min-w-0 flex-1">
@@ -263,7 +214,8 @@ export function SalesQuickAccess({
           <button
             type="button"
             className="btn-outline min-h-11"
-            onClick={() => persistSelection(suggestion.productId)}
+            onClick={() => setMutation.mutate({ siteId, productId: suggestion.productId })}
+            disabled={setMutation.isPending}
             data-testid="sales-quick-suggestion-add"
           >
             {t('suggestion.add')}
@@ -279,8 +231,8 @@ export function SalesQuickAccess({
         </div>
       )}
 
-      {categories.length > 0 && (
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1" aria-label={t('categories')}>
+      {!asChips && !hasCartItems && categories.length > 0 && (
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1" aria-label={t('categories')}>
           <button
             type="button"
             className={activeCategoryId === null ? 'btn-secondary' : 'btn-outline'}
@@ -303,83 +255,94 @@ export function SalesQuickAccess({
         </div>
       )}
 
-      {favoritesError && (
-        <div className="mt-3 rounded-lg border border-line p-3 text-sm" role="alert">
+      {keysQuery.isError && (
+        <div className="mt-2 rounded-xl border border-line p-3 text-sm" role="alert">
           <p>{t('favoritesLoadError')}</p>
-          <button
-            type="button"
-            className="btn-outline mt-2"
-            onClick={() => {
-              for (const query of favoriteQueries) {
-                if (query.isError) void query.refetch();
-              }
-            }}
-          >
+          <button type="button" className="btn-outline mt-2" onClick={() => keysQuery.refetch()}>
             {t('retryFavorites')}
           </button>
         </div>
       )}
-      {productsQuery.isLoading || favoritesLoading ? (
-        <div className="mt-3 grid min-h-24 place-items-center text-sm text-fg2" role="status">
-          <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
+      {isLoading ? (
+        <div className="sales-quick-keys-loading mt-2" role="status">
+          <LoaderCircle className="h-5 w-5 motion-safe:animate-spin text-fg3" aria-hidden="true" />
           <span className="sr-only">{t('loading')}</span>
         </div>
-      ) : visibleProducts.length > 0 ? (
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-          {visibleProducts.map(product => {
-            const isFavorite = selectedIds.includes(product.id);
-            const discount = discountSuggestions.get(product.id) ?? 0;
-            const isLoading = loadingProductId === product.id;
+      ) : asChips ? (
+        <div className="sales-quick-chips">
+          {visibleTiles.map(tile => {
+            const isOpenValue = tile.kind === 'open_value';
             return (
               <button
-                key={product.id}
+                key={tile.key}
                 type="button"
-                className={[
-                  'group relative min-h-[4.5rem] rounded-[12px] border px-3 py-2.5 text-left transition-colors',
-                  isEditing && isFavorite
-                    ? 'border-primary-300 bg-primary-50'
-                    : 'border-line/70 bg-surface hover:border-primary-300 hover:bg-primary-50/60',
-                ].join(' ')}
-                onClick={() => {
-                  void handleProductAction(product);
-                }}
-                disabled={isLoading}
-                aria-label={
-                  isEditing
-                    ? t(isFavorite ? 'removeFavorite' : 'addFavorite', {
-                        name: product.name,
-                      })
-                    : t('addProduct', { name: product.name })
-                }
-                data-testid={`sales-quick-product-${product.sku}`}
+                className="sales-pill sales-quick-chip"
+                aria-pressed={isOpenValue ? valueTile?.key === tile.key : undefined}
+                onClick={() => handleTile(tile)}
+                disabled={loadingKey === tile.key}
+                aria-label={t(isOpenValue ? 'sellByValue' : 'addProduct', { name: tile.name })}
+                data-testid={`sales-quick-${isOpenValue ? 'value' : 'product'}-${tile.sku}`}
+              >
+                <span className="truncate">{tile.name}</span>
+                {isOpenValue && <span className="text-fg3">{t('openValue')}</span>}
+                {loadingKey === tile.key && (
+                  <LoaderCircle className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
+                )}
+              </button>
+            );
+          })}
+          {canEdit && (
+            <button
+              type="button"
+              className="sales-pill sales-quick-chip is-edit"
+              onClick={() => setIsEditorOpen(true)}
+              aria-haspopup="dialog"
+              data-testid="sales-favorites-edit"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {t('editChip')}
+            </button>
+          )}
+        </div>
+      ) : visibleTiles.length > 0 ? (
+        <div className="sales-quick-keys mt-2">
+          {visibleTiles.map(tile => {
+            const discount = discountSuggestions.get(tile.productId) ?? 0;
+            const isOpenValue = tile.kind === 'open_value';
+            return (
+              <button
+                key={tile.key}
+                type="button"
+                className="sales-quick-key"
+                aria-pressed={isOpenValue ? valueTile?.key === tile.key : undefined}
+                onClick={() => handleTile(tile)}
+                disabled={loadingKey === tile.key}
+                aria-label={t(isOpenValue ? 'sellByValue' : 'addProduct', { name: tile.name })}
+                data-testid={`sales-quick-${isOpenValue ? 'value' : 'product'}-${tile.sku}`}
               >
                 <span className="flex items-start justify-between gap-2">
-                  <span className="line-clamp-2 text-sm font-semibold leading-4 text-fg1">
-                    {product.name}
+                  <span className="line-clamp-2 text-sm font-semibold leading-tight text-fg1">
+                    {tile.name}
                   </span>
-                  {isEditing && (
-                    <Star
-                      className={[
-                        'h-4 w-4 shrink-0',
-                        isFavorite ? 'fill-primary-600 text-primary-700' : 'text-fg3',
-                      ].join(' ')}
+                  {tile.colour && (
+                    <span
+                      className="sales-quick-key-swatch"
+                      data-colour={tile.colour}
                       aria-hidden="true"
                     />
                   )}
                 </span>
-                <span className="mt-2 flex items-end justify-between gap-2 text-xs">
-                  <span className="font-mono font-semibold text-primary-800">
-                    {formatCurrency(product.price)}
+                <span className="flex items-end justify-between gap-2">
+                  <span className="font-numeric text-base font-bold text-fg1">
+                    {isOpenValue ? t('openValue') : formatCurrency(tile.price)}
                   </span>
-                  {discount > 0 && (
-                    <span className="rounded-md bg-warning-100 px-1.5 py-0.5 font-semibold text-warning-800">
-                      -{discount}%
-                    </span>
+                  {discount > 0 && !isOpenValue && (
+                    <span className="sales-tag bg-warning-50 text-warning-700">-{discount}%</span>
                   )}
                 </span>
-                {isLoading && (
-                  <span className="absolute inset-0 grid place-items-center rounded-[12px] bg-surface/80">
-                    <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
+                {loadingKey === tile.key && (
+                  <span className="absolute inset-0 grid place-items-center rounded-[inherit] bg-card/80">
+                    <LoaderCircle className="h-5 w-5 motion-safe:animate-spin" aria-hidden="true" />
                   </span>
                 )}
               </button>
@@ -387,19 +350,30 @@ export function SalesQuickAccess({
           })}
         </div>
       ) : (
-        <div className="mt-3 rounded-[12px] border border-dashed border-line p-4 text-center">
-          <p className="text-sm text-fg2">
-            {isEditing ? t('noCategoryProducts') : t('noFavorites')}
-          </p>
+        <div className="sales-quick-keys-loading mt-2 border border-dashed border-line">
+          <p className="text-sm text-fg2">{t('noFavorites')}</p>
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" className="btn-outline" onClick={onOpenSearch}>
-          <Search className="h-4 w-4" aria-hidden="true" />
-          {t('searchCatalog')}
-        </button>
-      </div>
+      {valueTile && (
+        <QuickKeyValueForm
+          key={valueTile.key}
+          className="mt-2"
+          tile={valueTile}
+          resolveSelection={resolveSelection}
+          onAdd={(selection, quantity) => {
+            onSelectProduct(selection, quantity);
+            setValueTile(null);
+          }}
+          onCancel={() => setValueTile(null)}
+        />
+      )}
+
+      {isEditorOpen && (
+        <Suspense fallback={null}>
+          <SiteQuickKeysEditor siteId={siteId} onClose={() => setIsEditorOpen(false)} />
+        </Suspense>
+      )}
     </section>
   );
 }

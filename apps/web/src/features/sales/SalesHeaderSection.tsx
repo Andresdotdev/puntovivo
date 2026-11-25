@@ -1,114 +1,165 @@
-import { type ReactNode, type RefObject } from 'react';
+import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { History, MonitorUp, PauseCircle } from 'lucide-react';
-import { SalesQuickSearchBar } from '@/features/sales/SalesQuickSearchBar';
+import { FileText, History, MonitorUp, PauseCircle } from 'lucide-react';
+import { useRegisterZone } from '@/features/modules/useRegisterZone';
 import { PaceToggleButton } from '@/features/sales/PaceToggleButton';
 import { SoundToggleButton } from '@/features/sales/SoundToggleButton';
 import { type CartWorkspace } from '@/features/sales/useCartWorkspaceStore';
+import { quotationDaysLeft, quotationExpiryLabel } from '@/features/sales/quotationValidity';
+import { useResolvedLocale } from '@/features/locale/LocaleProvider';
 import { ariaKeyshortcutsFor } from '@/lib/shortcuts';
+import { cn } from '@/lib/utils';
 
-/**
- * Props for {@link SalesHeaderSection}.
- *
- * The POS top chrome: the product search bar plus the History / Ventas
- * suspendidas drawer triggers, and the resumed-cart banner. Purely
- * presentational — every value + handler is owned by SalesPage.
- */
+/** The register strip above the ticket, followed by the locked-cart banners. */
 interface SalesHeaderSectionProps {
-  productSearchQuery: string;
-  onQueryChange: (value: string) => void;
-  onSubmitSearch: () => void;
-  productInputRef: RefObject<HTMLInputElement | null>;
+  /** Open register name; null while the register is closed. */
+  registerName: string | null;
+  cashierName: string | null;
+  siteName: string | null;
   onOpenHistory: () => void;
-  onOpenSuspended: () => void;
+  /** Omitted when the register does not park sales and none are waiting. */
+  onOpenSuspended?: (() => void) | undefined;
   suspendedDraftsCount: number;
   customerDisplayEnabled: boolean;
   onOpenCustomerDisplay: () => void;
   isResumedCart: boolean;
-  itemsLocked: boolean;
   activeWorkspace: CartWorkspace | null;
-  /** Open tickets, kept in the command bar on wide screens. */
+  /** Open tickets, kept in the strip. */
   workspaceTabs?: ReactNode;
+  /** Connection and device pills. */
+  status?: ReactNode;
+  /** Price tier of the active ticket; omitted on locked tickets. */
+  priceTier?: 1 | 2 | 3 | undefined;
+  onPriceTierChange?: ((tier: 1 | 2 | 3) => void) | undefined;
 }
 
+const UTILITY_BUTTON =
+  'sales-strip-action btn-outline flex min-w-0 flex-none items-center justify-center gap-2 whitespace-nowrap';
+
 export function SalesHeaderSection({
-  productSearchQuery,
-  onQueryChange,
-  onSubmitSearch,
-  productInputRef,
+  registerName,
+  cashierName,
+  siteName,
   onOpenHistory,
   onOpenSuspended,
   suspendedDraftsCount,
   customerDisplayEnabled,
   onOpenCustomerDisplay,
   isResumedCart,
-  itemsLocked,
   activeWorkspace,
   workspaceTabs,
+  status,
+  priceTier,
+  onPriceTierChange,
 }: SalesHeaderSectionProps) {
-  const { t } = useTranslation('sales');
+  const { t } = useTranslation(['sales', 'salesOperation']);
+  const who = [cashierName, siteName].filter(Boolean).join(' · ');
+  // Off, the ticket tab still names the quotation.
+  const showsQuotationBanner = useRegisterZone('quote-delivery');
+  const { timezone } = useResolvedLocale();
+  const quotationDays = quotationDaysLeft(
+    activeWorkspace?.sourceQuotationValidUntil ?? null,
+    timezone
+  );
+  const quotationExpiry = quotationDays === null ? null : quotationExpiryLabel(quotationDays);
+  const quotationNeedsSerials = activeWorkspace?.items.some(item => item.tracksSerials) ?? false;
 
   return (
     <>
       <div
-        className="sales-scan-stage flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-stretch lg:flex-nowrap lg:items-center lg:shrink-0"
+        className="sales-register-strip"
+        role="group"
+        aria-label={t('sell.strip.ariaLabel')}
         data-testid="sales-command-bar"
       >
-        <div className="min-w-0 flex-1">
-          <SalesQuickSearchBar
-            query={productSearchQuery}
-            onQueryChange={onQueryChange}
-            onSubmit={onSubmitSearch}
-            inputRef={productInputRef}
-            disabled={itemsLocked}
-          />
-        </div>
-        {workspaceTabs}
-        <div
-          className={`pv-control-cluster sales-utility-dock${customerDisplayEnabled ? ' sales-utility-dock-has-display' : ''}`}
+        <span
+          className={`sales-pill sales-register-state md:hidden ${registerName ? 'is-open' : ''}`}
+          title={registerName ?? undefined}
+          data-testid="sales-register-state"
         >
+          {t(registerName ? 'salesOperation:registerOpen' : 'salesOperation:registerClosed')}
+        </span>
+        <p
+          className="min-w-0 shrink-[4] truncate max-md:hidden"
+          data-testid="sales-register-identity"
+        >
+          <span className="font-display text-lg font-bold text-fg1">
+            {registerName ?? t('cashSession.inactive')}
+          </span>
+          {who && <span className="ml-2.5 hidden text-[13px] text-fg3 2xl:inline">{who}</span>}
+        </p>
+        <span className="hidden h-7 w-px shrink-0 bg-line-strong lg:block" aria-hidden="true" />
+        {workspaceTabs}
+        {priceTier !== undefined && onPriceTierChange && (
+          <div
+            className="flex shrink-0 items-center gap-0.5 rounded-xl border border-line bg-surface-3 p-0.5"
+            role="group"
+            aria-label={t('checkout.priceTier.groupLabel')}
+            data-testid="sales-price-tier"
+          >
+            {([1, 2, 3] as const).map(tier => (
+              <button
+                key={tier}
+                type="button"
+                className="sales-tier-key"
+                aria-pressed={tier === priceTier}
+                data-testid={`sales-price-tier-${tier}`}
+                title={t(`checkout.priceTier.tier${tier}Title`)}
+                onClick={() => onPriceTierChange(tier)}
+              >
+                {t(`checkout.priceTier.tier${tier}`)}
+              </button>
+            ))}
+          </div>
+        )}
+        <span className="hidden flex-1 lg:block" />
+        {status}
+        <div className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
-            className="pv-control-key sales-utility-action btn-outline flex flex-1 items-center justify-center gap-2 whitespace-nowrap sm:flex-none"
+            className={UTILITY_BUTTON}
             onClick={onOpenHistory}
             data-testid="sales-open-history"
             title={t('view.history')}
           >
             <History className="h-4 w-4" aria-hidden="true" />
-            <span className="lg:sr-only">{t('view.history')}</span>
+            <span className="min-w-0 truncate max-md:sr-only lg:sr-only">{t('view.history')}</span>
           </button>
-          <button
-            type="button"
-            className="pv-control-key sales-utility-action btn-outline flex flex-1 items-center justify-center gap-2 whitespace-nowrap sm:flex-none"
-            onClick={onOpenSuspended}
-            data-testid="sales-open-suspended"
-            title={t('park.panelTitle')}
-            aria-keyshortcuts={
-              suspendedDraftsCount > 0 ? ariaKeyshortcutsFor('sales.toggleSuspended') : undefined
-            }
-          >
-            <PauseCircle className="h-4 w-4" aria-hidden="true" />
-            <span className="lg:sr-only">{t('park.panelTitle')}</span>
-            {suspendedDraftsCount > 0 && (
-              <span
-                className="inline-flex min-w-5 items-center justify-center rounded-full bg-primary-100 px-1.5 text-xs font-semibold text-primary-700"
-                data-testid="sales-suspended-count"
-              >
-                {suspendedDraftsCount}
+          {onOpenSuspended && (
+            <button
+              type="button"
+              className={UTILITY_BUTTON}
+              onClick={onOpenSuspended}
+              data-testid="sales-open-suspended"
+              title={t('park.panelTitle')}
+              aria-keyshortcuts={
+                suspendedDraftsCount > 0 ? ariaKeyshortcutsFor('sales.toggleSuspended') : undefined
+              }
+            >
+              <PauseCircle className="h-4 w-4" aria-hidden="true" />
+              <span className="min-w-0 truncate max-md:sr-only lg:sr-only">
+                {t('park.panelTitle')}
               </span>
-            )}
-          </button>
+              {suspendedDraftsCount > 0 && (
+                <span
+                  className="inline-flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 font-numeric text-xs font-bold text-primary"
+                  data-testid="sales-suspended-count"
+                >
+                  {suspendedDraftsCount}
+                </span>
+              )}
+            </button>
+          )}
           {customerDisplayEnabled ? (
             <button
               type="button"
-              className="pv-control-key sales-utility-action btn-outline flex flex-1 items-center justify-center gap-2 whitespace-nowrap sm:flex-none"
+              className={UTILITY_BUTTON}
               onClick={onOpenCustomerDisplay}
               data-testid="sales-open-customer-display"
               aria-label={t('view.customerDisplay')}
               title={t('view.customerDisplay')}
             >
               <MonitorUp className="h-4 w-4" aria-hidden="true" />
-              <span className="sr-only">{t('view.customerDisplay')}</span>
             </button>
           ) : null}
           <SoundToggleButton />
@@ -118,7 +169,7 @@ export function SalesHeaderSection({
 
       {isResumedCart && activeWorkspace?.serverSaleNumber && (
         <div
-          className="rounded-2xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-900 xl:shrink-0"
+          className="rounded-2xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-900 lg:shrink-0"
           role="status"
           data-testid="resumed-cart-banner"
         >
@@ -136,24 +187,40 @@ export function SalesHeaderSection({
         </div>
       )}
 
-      {activeWorkspace?.sourceQuotationNumber && (
+      {showsQuotationBanner && activeWorkspace?.sourceQuotationNumber && (
         <div
-          className="rounded-2xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-900 xl:shrink-0"
+          className="rounded-[14px] bg-primary-50 px-3.5 py-2.5 text-sm text-primary-900 lg:shrink-0"
           role="status"
           data-testid="quotation-cart-banner"
         >
-          <p className="font-semibold">
-            {t('quotationCart.banner', {
-              quotationNumber: activeWorkspace.sourceQuotationNumber,
-            })}
+          <p className="flex items-center gap-2.5 font-semibold">
+            <FileText className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+            <span className="min-w-0 flex-1">
+              {t('quotationCart.banner', {
+                quotationNumber: activeWorkspace.sourceQuotationNumber,
+              })}
+            </span>{' '}
+            {quotationExpiry && (
+              <span
+                className={cn(
+                  'shrink-0 font-medium',
+                  quotationExpiry[0] === 'quotationCart.expired' && 'text-danger-700'
+                )}
+                data-testid="quotation-cart-expiry"
+              >
+                {t(quotationExpiry[0], { count: quotationExpiry[1] })}
+              </span>
+            )}
           </p>
-          <p className="mt-1 text-xs text-primary-800/80">{t('quotationCart.bannerHint')}</p>
+          {quotationNeedsSerials && (
+            <p className="mt-1 pl-7 text-xs text-primary-800">{t('quotationCart.bannerHint')}</p>
+          )}
         </div>
       )}
 
       {activeWorkspace?.sourceReturnId && (
         <div
-          className="rounded-2xl border border-warning-500/30 bg-warning-50 px-4 py-3 text-sm text-warning-900 xl:shrink-0"
+          className="rounded-2xl border border-warning-500/30 bg-warning-50 px-4 py-3 text-sm text-warning-900 lg:shrink-0"
           role="status"
           data-testid="exchange-cart-banner"
         >

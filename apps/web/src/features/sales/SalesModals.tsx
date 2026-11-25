@@ -8,10 +8,11 @@ import { ProductSearchDialog } from '@/components/dialogs/ProductSearchDialog';
 import { Modal, ModalButton } from '@/components/form-controls/Modal';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useTenant } from '@/features/tenant/TenantProvider';
-import { useIsModuleActive } from '@/features/modules/ModulesContext';
+import { useRegisterZone } from '@/features/modules/useRegisterZone';
 import { LazySalePaymentModal } from '@/features/sales/lazySalePaymentModal';
 import { preloadSalePaymentModal } from '@/features/sales/salePaymentModal.loader';
-import type { SalePaymentValues } from '@/features/sales/salePaymentModal.types';
+import type { InitialTender, SalePaymentValues } from '@/features/sales/salePaymentModal.types';
+import type { PaymentFocusTarget } from '@/features/sales/useSalesModals';
 import { mergeCartItem, type SaleCartItem } from '@/features/sales/saleCart';
 import { useQuickCreateStore } from '@/features/sales/useQuickCreateStore';
 import { normalizeRestaurantGuestCount } from '@/features/restaurants/restaurantDraft';
@@ -41,6 +42,11 @@ const LazyReceiptShareSection = lazy(() =>
     default: module.ReceiptShareSection,
   }))
 );
+
+const PAYMENT_FOCUS_SELECTORS: Record<PaymentFocusTarget, string> = {
+  customer: '#sale-payment-customer',
+  invoice: '[data-testid="sale-electronic-invoice-toggle"]',
+};
 
 /** Functional or value update for the active cart, mirroring SalesPage's `setCartItems` wrapper. */
 type SetCartItemsArg = SaleCartItem[] | ((previous: SaleCartItem[]) => SaleCartItem[]);
@@ -73,6 +79,7 @@ interface SalesModalsProps {
   isPaymentModalOpen: boolean;
   paymentModalKey: number;
   paymentTotal: number;
+  paymentConsumptionTax?: number | undefined;
   paymentApprovalSaleId: string | null;
   paymentApprovalCustomerId: string | null;
   paymentCustomerLocked: boolean;
@@ -84,8 +91,12 @@ interface SalesModalsProps {
   isPaymentSaving: boolean;
   saleError: string | null;
   serviceChargeRate: number;
+  cashRoundingStep?: number | null | undefined;
   allowTip: boolean;
   fastCashTrigger: number;
+  fastCashAmount?: number | null | undefined;
+  paymentInitialMethod?: InitialTender | undefined;
+  paymentFocusTarget?: PaymentFocusTarget | null | undefined;
   paymentRestoreFocusTo: () => HTMLElement | null;
   activePriceTier: 1 | 2 | 3;
   onCustomerPriceTierChange?: ((tier: 1 | 2 | 3) => void) | undefined;
@@ -93,7 +104,10 @@ interface SalesModalsProps {
   onSubmitPayment: (values: SalePaymentValues) => Promise<void>;
   // Sale details
   selectedSaleId: string | null;
+  /** Opens the receipt's WhatsApp share review along with the sale. */
+  shareReceiptOnOpen?: boolean | undefined;
   onCloseSaleDetails: () => void;
+  onExchangeStarted?: () => void;
   // Suspend-label prompt
   isSuspendLabelPromptOpen: boolean;
   isSuspending: boolean;
@@ -118,6 +132,7 @@ export function SalesModals({
   isPaymentModalOpen,
   paymentModalKey,
   paymentTotal,
+  paymentConsumptionTax,
   paymentApprovalSaleId,
   paymentApprovalCustomerId,
   paymentCustomerLocked,
@@ -129,15 +144,21 @@ export function SalesModals({
   isPaymentSaving,
   saleError,
   serviceChargeRate,
+  cashRoundingStep = null,
   allowTip,
   fastCashTrigger,
+  fastCashAmount = null,
+  paymentInitialMethod = 'cash',
+  paymentFocusTarget = null,
   paymentRestoreFocusTo,
   activePriceTier,
   onCustomerPriceTierChange,
   onClosePayment,
   onSubmitPayment,
   selectedSaleId,
+  shareReceiptOnOpen = false,
   onCloseSaleDetails,
+  onExchangeStarted,
   isSuspendLabelPromptOpen,
   isSuspending,
   suspendLabelDraft,
@@ -148,7 +169,8 @@ export function SalesModals({
   const { t } = useTranslation(['sales', 'restaurants', 'common']);
   const { user, tenant } = useAuth();
   const { currentSite } = useTenant();
-  const dineInActive = useIsModuleActive('dine-in');
+  const showsTables = useRegisterZone('tables');
+  const sellsInUnits = useRegisterZone('units-cut');
   const [suspendTableId, setSuspendTableId] = useState('');
   const [suspendGuestCount, setSuspendGuestCount] = useState(1);
   const [reservationSelection, setReservationSelection] = useState('');
@@ -162,6 +184,25 @@ export function SalesModals({
   const shouldRenderQuickCreateCustomerGate = useQuickCreateStore(
     state => state.requestedCreateCustomer !== null
   );
+
+  // The drawer is lazy and takes focus when it mounts; wait for the field, then move.
+  useEffect(() => {
+    if (!isPaymentModalOpen || !paymentFocusTarget) return;
+    const selector = PAYMENT_FOCUS_SELECTORS[paymentFocusTarget];
+    let frame = 0;
+    let attempts = 0;
+    const seek = () => {
+      const field = document.querySelector<HTMLElement>(selector);
+      if (field) {
+        field.focus();
+        field.scrollIntoView?.({ block: 'center' });
+      } else if (++attempts < 120) {
+        frame = requestAnimationFrame(seek);
+      }
+    };
+    frame = requestAnimationFrame(seek);
+    return () => cancelAnimationFrame(frame);
+  }, [isPaymentModalOpen, paymentFocusTarget, paymentModalKey]);
 
   // These catalogs belong to interaction-only overlays. SalesModals itself
   // is absent from the initial POS tree, so the query observers are not
@@ -182,11 +223,11 @@ export function SalesModals({
   );
   const suspendTablesQuery = trpc.restaurantTables.list.useQuery(
     currentSite ? { siteId: currentSite.id, includeArchived: false } : (undefined as never),
-    { enabled: isSuspendLabelPromptOpen && dineInActive && Boolean(currentSite) }
+    { enabled: isSuspendLabelPromptOpen && showsTables && Boolean(currentSite) }
   );
   const suspendTableStateQuery = trpc.restaurantServices.getTableState.useQuery(
     suspendTableId ? { tableId: suspendTableId } : (undefined as never),
-    { enabled: isSuspendLabelPromptOpen && dineInActive && suspendTableId.length > 0 }
+    { enabled: isSuspendLabelPromptOpen && showsTables && suspendTableId.length > 0 }
   );
   const selectedSuspendTable = suspendTablesQuery.data?.items.find(
     table => table.id === suspendTableId
@@ -198,7 +239,7 @@ export function SalesModals({
   const suspendGuestCapacity = selectedSuspendTable?.seatCount ?? 200;
   const suspendTableSelectionInvalid =
     suspendTableId.length > 0 &&
-    (!dineInActive ||
+    (!showsTables ||
       suspendTablesQuery.isLoading ||
       Boolean(suspendTablesQuery.error) ||
       !selectedSuspendTable ||
@@ -262,11 +303,12 @@ export function SalesModals({
             useQuickCreateStore.getState().requestCreateProduct({ defaultName });
           }}
           canCreateProducts={user?.role === 'admin' || user?.role === 'manager'}
-          // the POS is the surface where the expiry-radar
-          // suggestion must reach the cashier; other dialog consumers
-          // keep the prop off (zero extra queries).
-          showDiscountSuggestions
+          // Only the register shows expiry suggestions, lots and generics;
+          // other dialog consumers keep the prop off (zero extra queries).
+          registerHints
+          priceTier={activePriceTier}
           siteId={discountSuggestionSiteId}
+          showUnitPicker={sellsInUnits}
         />
       )}
       {(shouldRenderQuickCreateProductGate || shouldRenderQuickCreateCustomerGate) && (
@@ -324,6 +366,7 @@ export function SalesModals({
             key={paymentModalKey}
             isOpen={isPaymentModalOpen}
             total={paymentTotal}
+            consumptionTaxAmount={paymentConsumptionTax}
             approvalSaleId={paymentApprovalSaleId}
             approvalCustomerId={paymentApprovalCustomerId}
             customerLocked={paymentCustomerLocked}
@@ -336,6 +379,7 @@ export function SalesModals({
             isSaving={isPaymentSaving}
             error={saleError}
             serviceChargeRate={serviceChargeRate}
+            cashRoundingStep={cashRoundingStep}
             allowTip={allowTip}
             // role gates the credit method tile inside the
             // modal. Cashier never sees it; manager + admin do; admin
@@ -345,6 +389,8 @@ export function SalesModals({
             // F2 fast-cash signal. Positive values apply
             // at mount; later increments re-apply exact cash while open.
             fastCashTrigger={fastCashTrigger}
+            fastCashAmount={fastCashAmount}
+            initialMethod={paymentInitialMethod}
             restoreFocusTo={paymentRestoreFocusTo}
             activePriceTier={activePriceTier}
             onCustomerPriceTierChange={onCustomerPriceTierChange}
@@ -360,9 +406,13 @@ export function SalesModals({
             saleId={selectedSaleId}
             isOpen={!!selectedSaleId}
             onClose={onCloseSaleDetails}
+            onExchangeStarted={onExchangeStarted}
             receiptShareSection={
               <Suspense fallback={null}>
-                <LazyReceiptShareSection saleId={selectedSaleId} />
+                <LazyReceiptShareSection
+                  saleId={selectedSaleId}
+                  initiallyOpen={shareReceiptOnOpen}
+                />
               </Suspense>
             }
           />
@@ -429,7 +479,7 @@ export function SalesModals({
               disabled={isSuspending}
               data-testid="suspend-label-input"
             />
-            {dineInActive && (suspendTablesQuery.data?.items.length ?? 0) > 0 && (
+            {showsTables && (suspendTablesQuery.data?.items.length ?? 0) > 0 && (
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="text-xs font-medium text-secondary-700">
                   {t('restaurants:tableLabel.label')}

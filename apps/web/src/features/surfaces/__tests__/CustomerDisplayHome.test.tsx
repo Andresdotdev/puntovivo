@@ -51,13 +51,13 @@ const COPY = {
     'states.live': 'En vivo',
     'states.offline.title': 'Pantalla sin conexión',
     'states.offline.description': 'Los detalles del carrito se ocultan.',
-    'states.noRegister.title': 'Abre una caja para comenzar',
-    'states.noRegister.description': 'Inicia una sesión de caja en Ventas.',
+    'states.noRegister.title': 'Abra una caja para comenzar',
+    'states.noRegister.description': 'Inicie una sesión de caja en Ventas.',
     'states.waiting.title': 'Esperando a {{register}}',
-    'states.waiting.description': 'Mantén abierta la venta activa.',
+    'states.waiting.description': 'Mantenga abierta la venta activa.',
     'states.idle.title': 'Todo listo para la próxima compra',
     'states.idle.description': 'Los productos y totales aparecerán aquí.',
-    'cart.title': 'Tu compra',
+    'cart.title': 'Su compra',
     'cart.quantity': '{{quantity}} {{unit}}',
     'cart.discount': '{{discount}} % de descuento',
     'summary.ariaLabel': 'Totales de la compra',
@@ -66,6 +66,8 @@ const COPY = {
     'summary.tax': 'Impuestos',
     'summary.total': 'Total',
     'summary.checkoutHint': 'El cajero confirmará el valor final.',
+    'transfer.title': 'Pague por transferencia',
+    'transfer.qrLabel': 'QR para transferir a {{name}}',
     privacy: 'Esta pantalla solo muestra productos y totales.',
   },
 } as const;
@@ -102,6 +104,10 @@ vi.mock('../useCustomerDisplayFeed', () => ({
       reconnect: mocks.reconnect,
     };
   },
+}));
+
+vi.mock('qrcode', () => ({
+  create: () => ({ modules: { size: 1, data: new Uint8Array([1]) } }),
 }));
 
 import { CustomerDisplayHome } from '../CustomerDisplayHome';
@@ -165,12 +171,42 @@ describe('CustomerDisplayHome', () => {
     mocks.connection = 'live';
     renderHome();
 
-    expect(await screen.findByText('Tu compra')).toBeInTheDocument();
+    expect(await screen.findByText('Su compra')).toBeInTheDocument();
     expect(screen.getByText('Café molido')).toBeInTheDocument();
     expect(screen.getByText('5 % de descuento')).toBeInTheDocument();
     expect(screen.getByTestId('customer-display-total')).toHaveTextContent('22.610');
     expect(document.body.textContent).not.toContain('tenant-1');
     expect(document.body.textContent).not.toContain('session-1');
+  });
+
+  it('shows the store transfer QR and the amount to transfer while the cashier charges by transfer', async () => {
+    mocks.projection = {
+      ...displayProjection(),
+      transfer: { label: 'Nequi', account: '310 555 0142', qrPayload: '000201abc', amount: 24_000 },
+    };
+    mocks.connection = 'live';
+    renderHome();
+
+    expect(await screen.findByText('Pague por transferencia')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'QR para transferir a Nequi' })).toBeInTheDocument();
+    expect(screen.getByTestId('customer-display-transfer-account')).toHaveTextContent(
+      'Nequi · 310 555 0142'
+    );
+    expect(screen.getByTestId('customer-display-total')).toHaveTextContent('24.000');
+    expect(screen.queryByText('El cajero confirmará el valor final.')).not.toBeInTheDocument();
+  });
+
+  it('shows only the provider name beside a per-charge provider QR', async () => {
+    mocks.projection = {
+      ...displayProjection(),
+      transfer: { label: 'Nequi', account: '', qrPayload: 'NEQUI-QR', amount: 24_000 },
+    };
+    mocks.connection = 'live';
+    renderHome();
+
+    expect(await screen.findByTestId('customer-display-transfer-account')).toHaveTextContent(
+      /^Nequi$/
+    );
   });
 
   it('renders the same live workflow in English', async () => {
@@ -211,7 +247,7 @@ describe('CustomerDisplayHome', () => {
     mocks.projection = displayProjection();
     mocks.connection = 'live';
     const { container } = renderHome();
-    await screen.findByText('Tu compra');
+    await screen.findByText('Su compra');
     await assertNoA11yViolations(container);
   });
 });

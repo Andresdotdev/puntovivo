@@ -110,6 +110,7 @@ describe('useCartWorkspaceStore', () => {
       serverSaleId: 'sale-123',
       serverSaleNumber: 'VTA-000042',
       serverCustomerId: 'customer-42',
+      serverCustomerName: null,
       priceTier: 3,
       label: 'Mesa 5',
       items: [sampleItem()],
@@ -135,6 +136,7 @@ describe('useCartWorkspaceStore', () => {
       serverSaleId: 'sale-deduplicated',
       serverSaleNumber: 'VTA-ORIGINAL',
       serverCustomerId: 'customer-original',
+      serverCustomerName: 'Acme',
       priceTier: 2,
       label: 'Mesa original',
       items: originalItems,
@@ -146,6 +148,7 @@ describe('useCartWorkspaceStore', () => {
       serverSaleId: 'sale-deduplicated',
       serverSaleNumber: 'VTA-REFRESHED',
       serverCustomerId: null,
+      serverCustomerName: null,
       priceTier: 1,
       label: 'Mesa actualizada',
       items: [sampleItem({ quantity: 1 })],
@@ -163,6 +166,7 @@ describe('useCartWorkspaceStore', () => {
     expect(state.workspaces[id]).toMatchObject({
       serverSaleNumber: 'VTA-REFRESHED',
       serverCustomerId: null,
+      serverCustomerName: null,
       priceTier: 1,
       label: 'Mesa actualizada',
       items: [sampleItem({ quantity: 1 })],
@@ -179,6 +183,7 @@ describe('useCartWorkspaceStore', () => {
       siteId: 'site-1',
       customerId: 'customer-42',
       customerName: 'Customer 42',
+      validUntil: '2026-11-25T23:59:59.000Z',
       priceTier: 3,
       items: [sampleItem({ sourceQuotationItemId: 'quote-line-1' })],
     });
@@ -190,6 +195,7 @@ describe('useCartWorkspaceStore', () => {
       sourceQuotationSiteId: 'site-1',
       sourceQuotationCustomerId: 'customer-42',
       sourceQuotationCustomerName: 'Customer 42',
+      sourceQuotationValidUntil: '2026-11-25T23:59:59.000Z',
       priceTier: 3,
       historyStack: [],
     });
@@ -281,6 +287,7 @@ describe('useCartWorkspaceStore', () => {
       serverSaleId: 'sale-locked',
       serverSaleNumber: 'VTA-LOCKED',
       serverCustomerId: null,
+      serverCustomerName: null,
       priceTier: 2,
       label: null,
       items: [sampleItem({ quantity: 2 })],
@@ -483,6 +490,7 @@ describe('useCartWorkspaceStore', () => {
         serverSaleId: 'sale-xyz',
         serverSaleNumber: 'VTA-9',
         serverCustomerId: null,
+        serverCustomerName: null,
         priceTier: 1,
         label: null,
         items: [sampleItem()],
@@ -534,6 +542,43 @@ describe('useCartWorkspaceStore', () => {
   });
 });
 
+describe('setCustomer', () => {
+  beforeEach(() => {
+    useCartWorkspaceStore.getState().resetAllWorkspaces();
+  });
+
+  it('attaches and detaches a customer on an editable ticket', () => {
+    const store = useCartWorkspaceStore.getState();
+    const id = store.createDraft('tenant-1:user-1');
+    store.setCustomer(id, { id: 'cust-1', name: 'María López' });
+    expect(useCartWorkspaceStore.getState().workspaces[id]).toMatchObject({
+      customerId: 'cust-1',
+      customerName: 'María López',
+    });
+    store.setCustomer(id, null);
+    expect(useCartWorkspaceStore.getState().workspaces[id]).toMatchObject({
+      customerId: null,
+      customerName: null,
+    });
+  });
+
+  it('never replaces the customer of a resumed draft', () => {
+    const store = useCartWorkspaceStore.getState();
+    const id = store.hydrateFromResumed({
+      ownerKey: 'tenant-1:user-1',
+      serverSaleId: 'sale-1',
+      serverSaleNumber: 'V-1',
+      serverCustomerId: 'cust-frozen',
+      serverCustomerName: 'Frozen',
+      priceTier: 1,
+      label: null,
+      items: [],
+    });
+    store.setCustomer(id, { id: 'cust-2', name: 'Other' });
+    expect(useCartWorkspaceStore.getState().workspaces[id]?.customerId).toBeNull();
+  });
+});
+
 describe('persisted workspace migration', () => {
   /** Reach the persist middleware's own migrate, the way zustand calls it. */
   function migrateFrom(fromVersion: number, persisted: unknown) {
@@ -579,14 +624,38 @@ describe('persisted workspace migration', () => {
     expect(workspace.sourceQuotationSiteId).toBeNull();
     expect(workspace.sourceQuotationCustomerId).toBeNull();
     expect(workspace.sourceQuotationCustomerName).toBeNull();
+    expect(workspace.sourceQuotationValidUntil).toBeNull();
     expect(workspace.serverCustomerId).toBeNull();
+    expect(workspace.serverCustomerName).toBeNull();
     expect(workspace.sourceReturnId).toBeNull();
     expect(workspace.sourceReturnSaleNumber).toBeNull();
     expect(workspace.sourceReturnCustomerId).toBeNull();
     expect(workspace.sourceReturnCustomerName).toBeNull();
+    expect(workspace.customerId).toBeNull();
+    expect(workspace.customerName).toBeNull();
     expect(workspace.priceTier).toBe(1);
     expect(workspace.historyStack).toEqual([]);
     expect(workspace.checkoutStartedAt).toBeNull();
+  });
+
+  it('keeps the quotation of a version 10 cart and gives it no end date', () => {
+    const migrated = migrateFrom(10, {
+      activeId: 'ws-q',
+      workspaces: {
+        'ws-q': {
+          id: 'ws-q',
+          ownerKey: 'tenant-1:user-1',
+          items: [sampleItem()],
+          sourceQuotationId: 'q-1',
+          sourceQuotationNumber: 'COT-1',
+        },
+      },
+    });
+    expect(migrated.workspaces['ws-q']).toMatchObject({
+      sourceQuotationId: 'q-1',
+      sourceQuotationNumber: 'COT-1',
+      sourceQuotationValidUntil: null,
+    });
   });
 
   it('leaves an already-migrated workspace untouched', () => {
@@ -602,6 +671,7 @@ describe('persisted workspace migration', () => {
           updatedAt: '2026-09-01T10:00:00.000Z',
           serverSaleId: null,
           serverCustomerId: 'cust-9',
+          serverCustomerName: null,
           sourceQuotationId: 'quote-7',
           sourceQuotationNumber: 'COT-000007',
           sourceQuotationSiteId: 'site-1',
@@ -611,6 +681,8 @@ describe('persisted workspace migration', () => {
           sourceReturnSaleNumber: null,
           sourceReturnCustomerId: null,
           sourceReturnCustomerName: null,
+          customerId: null,
+          customerName: null,
           priceTier: 2,
           historyStack: [],
           checkoutStartedAt: null,

@@ -15,7 +15,7 @@
  * @module application/sales/sale-read
  */
 
-import { and, eq, inArray, or } from 'drizzle-orm';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { isPriceTier } from '@puntovivo/shared/price-tier';
 import type { DatabaseInstance } from '../../db/index.js';
 import {
@@ -38,6 +38,7 @@ import {
   saleReturnItemTaxComponents,
   saleReturnPaymentAllocations,
   saleReturns,
+  unitXProduct,
   sales,
   tenants,
   units,
@@ -103,6 +104,7 @@ export async function getSaleRecord(db: DatabaseInstance, tenantId: string, sale
       serviceChargeAmount: sales.serviceChargeAmount,
       serviceChargeRate: sales.serviceChargeRate,
       total: sales.total,
+      roundingAdjustment: sales.roundingAdjustment,
       paymentMethod: sales.paymentMethod,
       paymentStatus: sales.paymentStatus,
       returnState: sales.returnState,
@@ -165,6 +167,8 @@ export async function getSaleRecord(db: DatabaseInstance, tenantId: string, sale
       unitEquivalence: saleItems.unitEquivalence,
       unitName: units.name,
       unitAbbreviation: units.abbreviation,
+      // Lets a resumed cart tell a non-base presentation at equivalence 1 from the base unit.
+      unitIsBase: unitXProduct.isBase,
       manualDiscountRate: saleItems.manualDiscountRate,
       discount: saleItems.discount,
       taxRate: saleItems.taxRate,
@@ -179,8 +183,16 @@ export async function getSaleRecord(db: DatabaseInstance, tenantId: string, sale
     .innerJoin(sales, and(eq(saleItems.saleId, sales.id), eq(sales.tenantId, tenantId)))
     .leftJoin(products, and(eq(saleItems.productId, products.id), eq(products.tenantId, tenantId)))
     .leftJoin(units, and(eq(saleItems.unitId, units.id), eq(units.tenantId, tenantId)))
+    .leftJoin(
+      unitXProduct,
+      and(
+        eq(unitXProduct.productId, saleItems.productId),
+        eq(unitXProduct.unitId, saleItems.unitId)
+      )
+    )
     .where(and(eq(saleItems.saleId, saleId), eq(sales.id, saleId)))
-    .orderBy(saleItems.id)
+    // Ids are random; insertion order is the order the cashier rang the lines up.
+    .orderBy(sql`${saleItems}.rowid`)
     .all();
 
   const serialNumbersByItem = listSaleItemSerialNumbers(db, {

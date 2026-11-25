@@ -51,6 +51,12 @@ vi.mock('@/lib/trpc', () => ({
         useQuery: () => ({ data: undefined, isLoading: false, error: null }),
       },
     },
+    // Its generic hint also mounts, disabled outside the register.
+    pharmacy: {
+      genericAlternatives: {
+        useQuery: () => ({ data: undefined, isLoading: false, error: null }),
+      },
+    },
   },
 }));
 
@@ -215,9 +221,7 @@ describe('InvoiceOcrDialog states', () => {
 
       expect(screen.getByText(/PDF \(1 página\)/i)).toBeInTheDocument();
       await userEvent.upload(uploadInput(document.body), pdfFile());
-      expect(
-        await screen.findByText(/Solo se admiten PDF de una página/i)
-      ).toBeInTheDocument();
+      expect(await screen.findByText(/Solo se admiten PDF de una página/i)).toBeInTheDocument();
       expect(screen.queryByText(/Synchronous invoice extraction/i)).not.toBeInTheDocument();
     } finally {
       await act(async () => {
@@ -361,7 +365,7 @@ describe('InvoiceOcrDialog states', () => {
     expect(await screen.findByText(/total does not match|total no coincide/i)).toBeInTheDocument();
     expect(screen.getByText(/without a catalog match|sin coincidencia/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/select the catalog supplier|selecciona el proveedor/i)
+      screen.getByText(/select the catalog supplier|seleccione el proveedor/i)
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /confirmar|confirm/i })).toBeDisabled();
   });
@@ -380,7 +384,7 @@ describe('InvoiceOcrDialog states', () => {
 
       expect(
         await screen.findByText(
-          '1 línea sin coincidencia en el catálogo. Asígnale un producto para confirmar.'
+          '1 línea sin coincidencia en el catálogo. Asígnele un producto para confirmar.'
         )
       ).toBeInTheDocument();
     } finally {

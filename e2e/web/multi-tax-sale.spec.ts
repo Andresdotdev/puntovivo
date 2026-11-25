@@ -130,11 +130,8 @@ test('CO product freezes IVA + INC through quotation, sale and receipt', async (
   await page.getByTestId('sidebar-primary-task-sell').click();
   await expect(page).toHaveURL(/\/sales(?:$|\?)/);
   await page.locator('#sales-product-search-input').fill(productSku);
+  // The form stores the SKU as the barcode, so Enter adds the exact code directly.
   await page.locator('#sales-product-search-input').press('Enter');
-  const searchRow = page.locator('tr', { has: page.getByText(productSku) }).first();
-  await expect(searchRow).toBeVisible();
-  await searchRow.click();
-  await page.getByRole('button', { name: 'Add to cart' }).click();
   await expect(page.getByTestId(`sale-cart-item-${productSku}`)).toBeVisible();
 
   const settlement = page.locator('.sales-settlement-dock');
@@ -150,7 +147,7 @@ test('CO product freezes IVA + INC through quotation, sale and receipt', async (
   await chargeDialog.getByRole('button', { name: 'Confirm Sale' }).click();
   await expect(chargeDialog).toBeHidden({ timeout: 15_000 });
 
-  await page.getByTestId('sales-open-last-receipt').click();
+  await page.getByTestId('sale-complete-receipt').click();
   const saleDialog = page.locator('[role="dialog"]:visible').last();
   await expect(saleDialog).toContainText(productName);
   await expect(saleDialog).toContainText(formatCop(100));

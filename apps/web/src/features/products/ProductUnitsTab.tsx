@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useWatch } from 'react-hook-form';
 import { MIN_OPERATIONAL_QUANTITY } from '@puntovivo/shared/unit-math';
 import type { UnitLookupOption } from './productForm.types';
+import { validateBarcodeCheckDigit } from './productForm.helpers';
 import { validateSerialUnitEquivalence } from './serialTracking';
 import type { UseProductFormReturn } from './useProductForm';
 import { Button } from '@/components/ui';
@@ -30,6 +31,7 @@ export function ProductUnitsTab({ formBundle, units, allowEmpty }: ProductUnitsT
             onClick={() =>
               unitAssignmentsFieldArray.append({
                 unitId: '',
+                barcode: '',
                 equivalence: 1,
                 price: form.getValues('price'),
                 price2: 0,
@@ -56,7 +58,9 @@ export function ProductUnitsTab({ formBundle, units, allowEmpty }: ProductUnitsT
             const removeHintId = `product-unit-remove-hint-${field.id}`;
             const equivalenceError =
               form.formState.errors.unitAssignments?.[index]?.equivalence?.message;
+            const barcodeError = form.formState.errors.unitAssignments?.[index]?.barcode?.message;
             const unitInputId = `product-unit-${field.id}`;
+            const barcodeInputId = `product-unit-barcode-${field.id}`;
             const equivalenceInputId = `product-unit-equivalence-${field.id}`;
             const priceInputId = `product-unit-price-${field.id}`;
             const price2InputId = `product-unit-price2-${field.id}`;
@@ -110,6 +114,29 @@ export function ProductUnitsTab({ formBundle, units, allowEmpty }: ProductUnitsT
                   {equivalenceError && (
                     <p className="mt-1 text-sm text-danger-500">{equivalenceError}</p>
                   )}
+                </div>
+                <div className="pv-field">
+                  <label className="label" htmlFor={barcodeInputId}>
+                    {t('form.units.barcode')}
+                  </label>
+                  <input
+                    id={barcodeInputId}
+                    className="pv-input"
+                    placeholder={t('form.units.barcodePlaceholder')}
+                    aria-invalid={barcodeError ? true : undefined}
+                    {...form.register(`unitAssignments.${index}.barcode` as const, {
+                      validate: value =>
+                        validateBarcodeCheckDigit(
+                          value,
+                          (form.formState.defaultValues?.unitAssignments ?? []).map(
+                            assignment => assignment?.barcode
+                          ),
+                          t('form.fields.barcodeCheckDigitInvalid')
+                        ),
+                    })}
+                  />
+                  {barcodeError && <p className="mt-1 text-sm text-danger-500">{barcodeError}</p>}
+                  <p className="mt-1 text-sm text-secondary-500">{t('form.units.barcodeHint')}</p>
                 </div>
                 <div className="pv-field">
                   <label className="label" htmlFor={priceInputId}>

@@ -7,7 +7,7 @@
  * Sections:
  * 1. Shell & Layout        — app-shell, shell-panel, page-header-*
  * 2. Cards & Surfaces      — card, card-inset, surface-panel, surface-empty, metric-tile, hero-surface
- * 3. Buttons               — btn-primary, btn-secondary, btn-outline, btn-ghost, btn-danger, btn-icon
+ * 3. Buttons               — btn-primary, btn-charge, btn-secondary, btn-outline, btn-ghost, btn-danger, btn-icon
  * 4. Mobile Navigation     — mobile-shell-toggle
  * 5. Segmented Controls    — segmented-control, segmented-tab
  * 6. Settings              — setting-toggle-card
@@ -46,10 +46,6 @@
   .operator-canvas {
     min-height: calc(100dvh - 5rem);
     background-color: var(--operator-canvas);
-    background-image:
-      linear-gradient(var(--operator-grid) 1px, transparent 1px),
-      linear-gradient(90deg, var(--operator-grid) 1px, transparent 1px);
-    background-size: 2rem 2rem;
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.66);
   }
 
@@ -80,18 +76,11 @@
       var(--shadow-card);
   }
 
+  /* The rail carries the .dark class so its children read the dark tokens in either theme. */
   .operator-sidebar {
-    background: linear-gradient(
-      180deg,
-      color-mix(in oklch, var(--operator-panel) 97%, transparent),
-      color-mix(in oklch, var(--operator-panel-muted) 92%, transparent)
-    );
-    box-shadow: inset -1px 0 0 rgb(255 255 255 / 0.58);
-  }
-
-  .operator-nav-link[aria-current='page'] {
-    box-shadow:
-      inset 0 -2px 0 rgb(3 18 29 / 0.28);
+    background: var(--rail);
+    color: var(--rail-foreground);
+    border-color: transparent;
   }
 
   .page-header-row {
@@ -248,10 +237,11 @@
    * 3. BUTTONS
    *
    * All button variants share a common base (min-h-11 for 44px touch target,
-   * rounded-2xl, gap-2, semibold text, focus ring, disabled state).
+   * 12px radius, 1.5px border, gap-2, semibold text, focus ring, disabled state).
    *
-   * .btn-primary   — Primary action (charge sale, save, confirm). Solid fill
-   * with shadow glow. Use sparingly — one per visible context.
+   * .btn-primary   — Primary action (save, confirm). Solid ink fill. One per
+   * visible context.
+   * .btn-charge    — Cobrar only. The single orange control on a screen.
    * .btn-secondary — Secondary action (record movement, add product). Bordered
    * with surface fill. Use next to primary when two actions
    * share equal importance.
@@ -271,120 +261,94 @@
   .btn-outline,
   .btn-ghost,
   .btn-success,
-  .btn-danger {
-    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-[11px] px-4 py-2.5 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-45;
-    box-shadow:
-      inset 0 -2px 0 var(--operator-key-edge),
-      inset 0 1px 0 rgb(255 255 255 / 0.7);
+  .btn-danger,
+  .btn-charge {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-[12px] border-[1.5px] border-transparent px-4 py-2.5 text-sm font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-45;
   }
 
   .btn-primary {
     color: var(--operator-commit-foreground);
     background: var(--operator-commit);
-    box-shadow:
-      inset 0 -3px 0 rgb(3 15 25 / 0.48),
-      inset 0 1px 0 rgb(255 255 255 / 0.15),
-      0 0.8rem 1.4rem -1rem rgb(8 30 46 / 0.58);
+    border-color: var(--operator-commit);
   }
 
   .btn-primary:hover {
     background: var(--operator-commit-hover);
-    transform: translateY(-1px);
+    border-color: var(--operator-commit-hover);
   }
 
   .btn-primary:active:not(:disabled),
   .btn-secondary:active:not(:disabled),
   .btn-outline:active:not(:disabled),
+  .btn-success:active:not(:disabled),
   .btn-danger:active:not(:disabled),
-  .btn-success:active:not(:disabled) {
+  .btn-charge:active:not(:disabled) {
     transform: translateY(1px);
-    box-shadow: inset 0 -1px 0 var(--operator-key-edge);
   }
 
-  .btn-primary:disabled {
+  .btn-primary:disabled,
+  .btn-charge:disabled {
     color: var(--fg3);
     background: var(--surface-2);
     border-color: var(--line);
     opacity: 1;
-    box-shadow: none;
     cursor: not-allowed;
   }
 
-  .btn-secondary {
-    @apply border border-line-strong/70 bg-surface-2/84 text-secondary-950;
+  .btn-charge {
+    color: var(--cobrar-foreground);
+    background: var(--cobrar);
+    border-color: var(--cobrar);
+    font-family: var(--font-display);
+    font-variation-settings: 'wdth' 88;
+    font-weight: 800;
   }
 
-  .btn-secondary:hover {
-    @apply border-primary-300 bg-primary-50/85 text-primary-700;
-    transform: translateY(-1px);
+  .btn-charge:hover {
+    background: var(--cobrar-hover);
+    border-color: var(--cobrar-hover);
   }
 
+  .btn-secondary,
   .btn-outline {
-    @apply border border-line-strong/70 bg-surface/86 text-secondary-900;
+    @apply border-line-strong bg-surface text-secondary-900;
   }
 
+  .btn-secondary:hover,
   .btn-outline:hover {
-    @apply border-primary-300 bg-primary-50/80 text-primary-700;
+    @apply border-primary-300 bg-primary-50 text-primary-900;
   }
 
   .btn-danger {
     color: var(--operator-semantic-control-foreground);
-    border: 1px solid color-mix(in oklch, var(--operator-critical-control) 78%, black);
     background: var(--operator-critical-control);
-    box-shadow:
-      inset 0 -3px 0 color-mix(in oklch, var(--operator-critical-control) 68%, black),
-      inset 0 1px 0 rgb(255 255 255 / 0.14),
-      0 0.75rem 1.2rem -1rem rgb(41 15 18 / 0.38);
+    border-color: var(--operator-critical-control);
   }
 
   .btn-danger:hover {
     background: var(--operator-critical-control-hover);
-    transform: translateY(-1px);
   }
 
   .btn-ghost {
-    @apply text-secondary-600;
-    box-shadow: none;
+    @apply text-secondary-700;
   }
 
   .btn-ghost:hover {
-    @apply bg-secondary-100/80 text-secondary-900;
+    @apply bg-surface-3 text-secondary-900;
   }
 
   .btn-success {
     color: var(--operator-semantic-control-foreground);
-    border: 1px solid color-mix(in oklch, var(--operator-positive-control) 78%, black);
     background: var(--operator-positive-control);
-    box-shadow:
-      inset 0 -3px 0 color-mix(in oklch, var(--operator-positive-control) 68%, black),
-      inset 0 1px 0 rgb(255 255 255 / 0.14),
-      0 0.75rem 1.2rem -1rem rgb(10 36 27 / 0.34);
+    border-color: var(--operator-positive-control);
   }
 
   .btn-success:hover {
     background: var(--operator-positive-control-hover);
-    transform: translateY(-1px);
   }
 
   .btn-icon {
     @apply h-10 w-10 rounded-[10px] px-0 py-0;
-  }
-
-  /* Dark overrides — buttons */
-  .dark .btn-secondary {
-    @apply border-line-strong/60 bg-surface-2/88 text-secondary-950;
-  }
-
-  .dark .btn-secondary:hover {
-    @apply border-primary-400/40 bg-primary-400/14 text-secondary-950;
-  }
-
-  .dark .btn-outline {
-    @apply border-line-strong/60 bg-surface-2/84 text-secondary-950;
-  }
-
-  .dark .btn-outline:hover {
-    @apply border-primary-400/40 bg-primary-400/12 text-secondary-950;
   }
 
   /* ==========================================================================
@@ -599,6 +563,2703 @@
   }
 
   /* ==========================================================================
+   * 7d. SELLING SCREEN
+   *
+   * Register strip, command input, last-read slot, ticket table, one-touch
+   * keys, checkout dock and shortcut strip of /sales. Every colour is a theme
+   * token, so light and dark share these rules.
+   * ======================================================================== */
+
+  .sales-cap {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--fg3);
+  }
+
+  .sales-tag {
+    display: inline-flex;
+    align-items: center;
+    height: 1.375rem;
+    padding: 0 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .sales-unit-select {
+    width: auto;
+    max-width: 100%;
+    height: 1.625rem;
+    padding: 0 1.5rem 0 0.5rem;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 0.5rem;
+    background-color: var(--card);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--fg1);
+    cursor: pointer;
+  }
+
+  .sales-unit-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.75rem;
+    padding: 0 0.625rem;
+    border: 1.5px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface-2);
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--fg2);
+  }
+
+  .sales-unit-chip:hover {
+    border-color: var(--primary-600);
+  }
+
+  .sales-unit-chip[aria-pressed='true'] {
+    border-color: var(--primary-900);
+    background: color-mix(in oklch, var(--primary-900) 8%, var(--card));
+    color: var(--fg1);
+  }
+
+  .sales-unit-chip:focus-visible,
+  .sales-unit-select:focus-visible {
+    outline: 2px solid var(--primary-600);
+    outline-offset: 1px;
+  }
+
+  /* Relative so screen-reader-only labels stay inside the strip when it scrolls. */
+  .sales-register-strip {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    padding: 0.5rem 0.875rem;
+    border: 1.5px solid var(--line);
+    border-radius: 1rem;
+    background: var(--card);
+  }
+
+  .sales-strip-action {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    padding-inline: 0.625rem;
+  }
+
+  .sales-ticket-tab {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0 0.875rem;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 0.8rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--fg2);
+  }
+
+  .sales-ticket-tab:hover {
+    border-color: var(--primary-600);
+  }
+
+  .sales-ticket-tab[aria-pressed='true'],
+  .sales-tender-tile[aria-pressed='true'] {
+    border-color: var(--foreground);
+    background: var(--foreground);
+    color: var(--background);
+  }
+
+  .sales-pill {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.25rem;
+    padding: 0 0.75rem;
+    border-radius: 999px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .sales-workbench-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+
+  .sales-command-input {
+    container: sales-command / inline-size;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 3.75rem;
+    padding: 0 0.5rem 0 1rem;
+    border: 2px solid var(--primary);
+    border-radius: 1rem;
+    background: var(--card);
+    box-shadow: 0 0 0 4px var(--accent);
+  }
+
+  .sales-command-input:focus-within {
+    box-shadow: 0 0 0 4px color-mix(in oklch, var(--primary-600) 38%, transparent);
+  }
+
+  .sales-command-input:has(input:disabled) {
+    border-color: var(--line-strong);
+    box-shadow: none;
+  }
+
+  .sales-command-input input {
+    flex: 1;
+    min-width: 0;
+    height: 3.25rem;
+    border: 0;
+    outline: none;
+    background: transparent;
+    font-size: 1.0625rem;
+    color: var(--fg1);
+  }
+
+  .sales-command-input input::placeholder {
+    color: var(--fg3);
+  }
+
+  .sales-command-hints {
+    display: none;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  /* Hints show only when the bar itself has room next to the placeholder. */
+  @container sales-command (min-width: 58rem) {
+    .sales-command-hints {
+      display: inline-flex;
+    }
+  }
+
+  .sales-command-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.8125rem;
+    color: var(--fg3);
+    white-space: nowrap;
+  }
+
+  .sales-command-search {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0 0.625rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--fg2);
+    white-space: nowrap;
+  }
+
+  .sales-command-search:hover:not(:disabled) {
+    background: var(--surface-2);
+  }
+
+  .sales-command-search .pv-kbd {
+    font-size: 0.875rem;
+    min-height: 1.75rem;
+  }
+
+  .sales-command-quantity {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.25rem 0.25rem 0.625rem;
+    border-radius: 0.625rem;
+    background: var(--accent);
+    color: var(--accent-foreground);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .sales-command-quantity-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 0.5rem;
+  }
+
+  .sales-command-quantity-clear:hover {
+    background: color-mix(in oklch, var(--accent-foreground) 12%, transparent);
+  }
+
+  .sales-command-menu {
+    position: absolute;
+    inset-inline: 0;
+    top: calc(100% + 0.5rem);
+    z-index: 30;
+    max-height: 22rem;
+    overflow-y: auto;
+    padding-bottom: 0.375rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 1rem;
+    background: var(--card);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .sales-command-option {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 2.75rem;
+    margin: 0 0.375rem;
+    padding: 0 0.75rem;
+    border-radius: 0.625rem;
+    font-size: 0.9375rem;
+    cursor: pointer;
+  }
+
+  .sales-command-option.is-active {
+    background: var(--accent);
+  }
+
+  /* The slot has a fixed height on desktop: a read, the idle state and the
+   * completed-sale strip swap inside it without moving the ticket. */
+  .sales-last-read {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    min-height: 4.75rem;
+    padding: 0.625rem 1.125rem;
+    border-radius: 1rem;
+    background: var(--rail);
+    color: var(--rail-foreground);
+  }
+
+  .sales-last-read-idle {
+    display: none;
+    background: var(--surface-3);
+    color: var(--fg2);
+  }
+
+  .sales-last-read-mark {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.75rem;
+    background: color-mix(in oklch, var(--rail-foreground) 12%, transparent);
+  }
+
+  .sales-last-read-idle .sales-last-read-mark {
+    background: var(--card);
+    color: var(--fg3);
+  }
+
+  .sales-last-read-kicker {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--rail-muted);
+  }
+
+  .sales-last-read-idle .sales-last-read-kicker {
+    color: var(--fg3);
+  }
+
+  .sales-last-read-meta {
+    color: var(--rail-muted);
+  }
+
+  /* The negative margin keeps a 44px target without growing the banner. */
+  .sales-last-read-undo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 2.75rem;
+    margin-block: -0.75rem;
+    padding: 0 0.25rem;
+    border-radius: 0.5rem;
+    color: inherit;
+  }
+
+  .sales-last-read-undo:hover {
+    color: var(--rail-foreground);
+    text-decoration: underline;
+  }
+
+  .sales-last-read-kbd {
+    padding: 0 0.375rem;
+    border: 1px solid color-mix(in oklch, var(--rail-muted) 80%, transparent);
+    border-radius: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--rail-foreground);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .sales-last-read-body {
+      animation: sales-read-in 180ms ease-out;
+    }
+
+    @keyframes sales-read-in {
+      from {
+        opacity: 0.35;
+        transform: translateY(3px);
+      }
+    }
+  }
+
+  .sales-ticket-head,
+  .sales-ticket-row {
+    display: grid;
+    align-items: center;
+    column-gap: 0.75rem;
+    grid-template-columns: 1.5rem minmax(0, 1fr) 9.25rem 5rem 5rem 7rem 2.75rem;
+  }
+
+  .sales-ticket-head {
+    padding: 0.375rem 1rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--fg3);
+  }
+
+  .sales-ticket-line {
+    padding: 0.25rem 1rem;
+    border-bottom: 1.5px solid var(--line);
+  }
+
+  /* Selection is a tint plus a full outline. */
+  .sales-ticket-line[data-selected='true'] {
+    border-bottom-color: transparent;
+    border-radius: 0.875rem;
+    background: var(--accent);
+    box-shadow: inset 0 0 0 2px var(--primary-600);
+  }
+
+  .sales-ticket-row {
+    min-height: 3.25rem;
+  }
+
+  .sales-ticket-index {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--fg3);
+  }
+
+  .sales-ticket-qty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+  }
+
+  .sales-stepper {
+    width: 2.75rem;
+    height: 2.75rem;
+    min-height: 2.75rem;
+    padding: 0;
+    border-radius: 0.7rem;
+    background: var(--surface-3);
+    color: var(--fg1);
+  }
+
+  .sales-ticket-unit {
+    display: inline-block;
+    justify-self: start;
+    max-width: 100%;
+    overflow: hidden;
+    padding: 0.1875rem 0.5rem;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--fg2);
+  }
+
+  .sales-ticket-price {
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    color: var(--fg2);
+  }
+
+  .sales-ticket-total {
+    @apply font-numeric;
+    font-size: 1.375rem;
+    font-weight: 700;
+    text-align: right;
+    white-space: nowrap;
+    color: var(--fg1);
+  }
+
+  .sales-ticket-details {
+    margin: 0.375rem 0 0.125rem 2.25rem;
+    padding-top: 0.375rem;
+    border-top: 1px solid color-mix(in oklch, var(--line-strong) 60%, transparent);
+    font-size: 0.75rem;
+    color: var(--fg2);
+  }
+
+  .sales-empty-ticket {
+    padding: 2rem 1.25rem;
+    border: 1.5px dashed var(--line-strong);
+    border-radius: 1rem;
+    text-align: center;
+  }
+
+  .sales-ticket-qty-compact {
+    display: none;
+  }
+
+  .sales-ticket-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.375rem;
+    margin-top: 0.125rem;
+    font-size: 0.75rem;
+    color: var(--fg3);
+  }
+
+  .sales-quick-chips {
+    display: flex;
+    gap: 0.375rem;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  /* Restaurant option chip; pressed means chosen. */
+  .modifier-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0 1rem;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 0.875rem;
+    background: var(--card);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--fg1);
+  }
+
+  .modifier-option small {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--fg2);
+  }
+
+  .modifier-option[aria-pressed='true'] {
+    border-color: var(--foreground);
+    background: var(--foreground);
+    color: var(--background);
+  }
+
+  .modifier-option[aria-pressed='true'] small {
+    color: inherit;
+  }
+
+  .modifier-option:focus-visible {
+    outline: 2px solid var(--primary-600);
+    outline-offset: 2px;
+  }
+
+  .modifier-option:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Split sheet: one column per account, scrolling sideways past two. */
+  .split-sheet-columns {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 48rem) {
+    .split-sheet-columns {
+      grid-template-columns: repeat(var(--split-columns, 2), minmax(17rem, 1fr));
+      overflow-x: auto;
+    }
+  }
+
+  .split-sheet-account {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-height: 12rem;
+  }
+
+  .split-sheet-move {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.625rem;
+    background: color-mix(in oklch, var(--fg1) 8%, transparent);
+    color: var(--fg1);
+  }
+
+  .split-sheet-move:hover:not(:disabled) {
+    background: color-mix(in oklch, var(--fg1) 14%, transparent);
+  }
+
+  .split-sheet-move:focus-visible {
+    outline: 2px solid var(--primary-600);
+    outline-offset: 2px;
+  }
+
+  .split-sheet-move:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .dish-tile {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 5.25rem;
+    padding: 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: 0.875rem;
+    background: var(--card);
+    color: var(--fg1);
+    text-align: left;
+  }
+
+  .dish-tile[aria-pressed='true'] {
+    border: 1.5px solid var(--primary-600);
+    background: var(--accent);
+  }
+
+  .dish-tile:focus-visible {
+    outline: 2px solid var(--primary-600);
+    outline-offset: 2px;
+  }
+
+  .dish-tile:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
+
+  .dish-tile-dot {
+    width: 0.625rem;
+    height: 0.625rem;
+    flex: none;
+    margin-top: 0.25rem;
+    border-radius: 9999px;
+    background: oklch(0.62 0.14 var(--tile-hue));
+  }
+
+  /* Composed with .sales-pill: a touch-sized, neutral chip. */
+  .sales-quick-chip {
+    flex: none;
+    gap: 0.375rem;
+    max-width: min(16rem, 100%);
+    min-height: 2.75rem;
+    padding: 0 0.875rem;
+    background: var(--surface-3);
+    font-size: 0.875rem;
+    color: var(--fg2);
+  }
+
+  .sales-quick-chip:hover:not(:disabled, [aria-pressed='true'], :has(:checked)) {
+    color: var(--fg1);
+  }
+
+  /* A pressed button or a checked radio inside a label chip reads as chosen. */
+  .sales-quick-chip[aria-pressed='true'],
+  .sales-quick-chip:has(:checked) {
+    background: var(--foreground);
+    color: var(--background);
+  }
+
+  .sales-quick-chip.is-edit {
+    border: 1.5px dashed var(--line-strong);
+    background: transparent;
+  }
+
+  /* Phones: one register row, keys as chips and a line per item; the fixed bar
+   * below owns the total, Cobrar and the park keys. */
+  @media (max-width: 767px) {
+    .sales-register-strip {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding: 0.375rem 0.5rem;
+      scrollbar-width: none;
+    }
+
+    .sales-register-strip > * {
+      flex-shrink: 0;
+    }
+
+    .sales-register-state {
+      background: var(--surface-3);
+      color: var(--fg2);
+    }
+
+    .sales-register-state.is-open {
+      background: var(--success-50);
+      color: var(--success-700);
+    }
+
+    .sales-command-input {
+      gap: 0.375rem;
+      min-height: 3.5rem;
+      padding: 0 0.375rem 0 0.25rem;
+      border-width: 2.5px;
+    }
+
+    .sales-command-input input {
+      height: 3rem;
+      font-size: 1rem;
+    }
+
+    .sales-pos-shell .sales-shortcut-strip,
+    .sales-pos-shell .sales-dock-top,
+    .sales-pos-shell .pv-kbd,
+    .sales-ticket-tab[aria-pressed='true'] .sales-ticket-tab-total {
+      display: none;
+    }
+
+    .sales-pos-shell .sales-quick-keys-loading {
+      min-height: 2.75rem;
+    }
+
+    .sales-ticket-head {
+      display: flex;
+      justify-content: flex-end;
+      padding-inline: 0;
+    }
+
+    .sales-ticket-head > :not(:nth-child(2)),
+    .sales-ticket-head-label,
+    .sales-ticket-index,
+    .sales-ticket-unit,
+    .sales-ticket-price {
+      display: none;
+    }
+
+    .sales-ticket-line {
+      padding-inline: 0.25rem;
+    }
+
+    .sales-ticket-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem 0.625rem;
+      min-height: 3.875rem;
+    }
+
+    .sales-ticket-name {
+      flex: 1 1 0;
+    }
+
+    .sales-ticket-qty-compact {
+      display: inline;
+      font-size: 0.9375rem;
+      white-space: nowrap;
+      color: var(--fg2);
+    }
+
+    .sales-ticket-total {
+      min-width: 4.875rem;
+      margin-left: auto;
+      font-size: 1.1875rem;
+    }
+
+    .sales-ticket-line:not([data-open='true'])
+      :is(.sales-ticket-meta, .sales-ticket-qty, .sales-ticket-remove, .sales-ticket-details) {
+      display: none;
+    }
+
+    /* The chosen line opens its keys: name on its own row, then quantity, total and remove. */
+    .sales-ticket-line[data-open='true'] .sales-ticket-name {
+      flex-basis: 100%;
+    }
+
+    .sales-ticket-line[data-open='true'] .sales-ticket-qty-compact {
+      display: none;
+    }
+
+    /* A scan selects the newest line; its keys and details wait for a tap. */
+    .sales-ticket-line[data-selected='true']:not([data-open='true']) {
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      border-bottom-color: var(--line);
+    }
+
+    .sales-ticket-details {
+      margin-left: 0;
+    }
+
+    .sale-done-strip .sale-done-actions {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  /* Pinned under the phone and tablet register: solid, so Reduce Transparency changes nothing. */
+  .sales-phone-bar {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 30;
+    padding: 0.75rem 1.125rem max(1rem, env(safe-area-inset-bottom));
+    border-top: 1.5px solid var(--line-strong);
+    background: var(--card);
+    box-shadow: 0 -18px 40px -24px rgb(10 18 33 / 0.28);
+  }
+
+  .sales-phone-total {
+    @apply font-numeric;
+    min-width: 0;
+    font-size: clamp(2rem, 11vw, 3.25rem);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    overflow-wrap: anywhere;
+    color: var(--fg1);
+  }
+
+  .sales-phone-charge {
+    min-height: 4rem;
+    margin-top: 0.625rem;
+    border-radius: 1.125rem;
+  }
+
+  .sales-phone-charge.sales-charge-key {
+    font-size: 1.4375rem;
+  }
+
+  .sales-phone-key {
+    min-width: 0;
+    min-height: 2.875rem;
+    padding-inline: 0.5rem;
+  }
+
+  /* Narrow phones drop the icons so the three names keep their size. */
+  @media (max-width: 399px) {
+    .sales-phone-key > svg,
+    .sales-phone-key .sales-credit-key-label > svg {
+      display: none;
+    }
+  }
+
+  .sales-phone-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.25rem;
+    padding: 0 0.375rem;
+    border-radius: 999px;
+    background: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--accent-foreground);
+  }
+
+  .sales-command-search-icon,
+  .sales-command-camera {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.75rem;
+  }
+
+  .sales-command-search-icon {
+    color: var(--fg3);
+  }
+
+  .sales-command-camera {
+    background: var(--foreground);
+    color: var(--background);
+  }
+
+  .receipt-share-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+    padding: 0.875rem 1.125rem 1rem;
+    border: 1.5px solid var(--line);
+    border-radius: 1.25rem;
+    background: var(--card);
+  }
+
+  .receipt-share-bubble {
+    padding: 0.75rem 0.875rem;
+    border-radius: 1rem;
+    background: var(--success-50);
+    font-size: 0.875rem;
+    line-height: 1.45;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    color: var(--fg1);
+    max-height: 13rem;
+    overflow-y: auto;
+  }
+
+  .sales-camera-frame {
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 4 / 3;
+    border-radius: 1rem;
+    background: var(--rail);
+  }
+
+  .sales-camera-frame video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .sales-camera-target {
+    position: absolute;
+    inset: 30% 12%;
+    border: 2px solid var(--rail-foreground);
+    border-radius: 0.75rem;
+  }
+
+  .sales-camera-torch {
+    position: absolute;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    border-radius: 999px;
+  }
+
+  /* Sits on live video, so it keeps the rail pair instead of the ghost hover tint. */
+  .sales-camera-torch:is(*, :hover) {
+    background: var(--rail);
+    color: var(--rail-foreground);
+  }
+
+  .sales-camera-torch[aria-pressed='true']:is(*, :hover) {
+    background: var(--rail-foreground);
+    color: var(--rail);
+  }
+
+  .sales-quick-keys {
+    display: grid;
+    gap: 0.5rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sales-quick-choose {
+    min-height: 2.25rem;
+    padding: 0 0.25rem;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    color: var(--fg2);
+  }
+
+  .sales-quick-choose:hover {
+    color: var(--fg1);
+    text-decoration: underline;
+  }
+
+  .weighed-panel {
+    container-type: inline-size;
+    padding: 0.8rem 0.95rem;
+    border-radius: 1.125rem;
+    background: var(--accent);
+    color: var(--fg1);
+  }
+
+  .weighed-readout {
+    @apply font-numeric;
+    font-size: 1.625rem;
+    font-weight: 700;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+
+  .weighed-keys {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.625rem;
+  }
+
+  .weighed-key {
+    display: flex;
+    flex: 1 1 4.5rem;
+    align-items: center;
+    justify-content: center;
+    min-height: 3.25rem;
+    padding: 0 0.75rem;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 0.875rem;
+    background: var(--card);
+    font-size: 1rem;
+    font-weight: 700;
+    white-space: nowrap;
+    color: var(--fg1);
+  }
+
+  .weighed-key.is-wide {
+    flex: 1.4 1 8rem;
+    font-size: 0.9rem;
+  }
+
+  /* Own row in a narrow panel; joins the keys when all six fit on one line. */
+  .weighed-key.is-scale {
+    flex-basis: 100%;
+    gap: 0.5rem;
+    font-size: 0.97rem;
+  }
+
+  @container (min-width: 42rem) {
+    .weighed-key.is-scale {
+      flex: 1.4 1 8rem;
+    }
+  }
+
+  .weighed-key:hover:not(:disabled) {
+    border-color: var(--primary-600);
+  }
+
+  .weighed-key:disabled {
+    opacity: 0.6;
+  }
+
+  .weighed-key:is(:disabled, [aria-busy='true']) {
+    cursor: progress;
+  }
+
+  .weighed-key:is([aria-pressed='true'], [data-on]) {
+    border-color: var(--fg1);
+    background: var(--fg1);
+    color: var(--card);
+  }
+
+  .sales-quick-key {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 0.375rem;
+    min-height: 4.25rem;
+    padding: 0.5rem 0.75rem;
+    border: 1.5px solid var(--line);
+    border-radius: 0.875rem;
+    background: var(--card);
+    text-align: left;
+  }
+
+  .sales-quick-key:hover {
+    border-color: var(--primary-600);
+  }
+
+  .sales-quick-key-swatch {
+    width: 0.75rem;
+    height: 0.75rem;
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+    border-radius: 0.25rem;
+    background: var(--swatch, var(--line-strong));
+  }
+
+  .sales-quick-key-swatch[data-colour='orange'] {
+    --swatch: var(--swatch-orange);
+  }
+  .sales-quick-key-swatch[data-colour='yellow'] {
+    --swatch: var(--swatch-yellow);
+  }
+  .sales-quick-key-swatch[data-colour='slate'] {
+    --swatch: var(--swatch-slate);
+  }
+  .sales-quick-key-swatch[data-colour='green'] {
+    --swatch: var(--swatch-green);
+  }
+  .sales-quick-key-swatch[data-colour='lime'] {
+    --swatch: var(--swatch-lime);
+  }
+  .sales-quick-key-swatch[data-colour='sky'] {
+    --swatch: var(--swatch-sky);
+  }
+  .sales-quick-key-swatch[data-colour='violet'] {
+    --swatch: var(--swatch-violet);
+  }
+  .sales-quick-key-swatch[data-colour='red'] {
+    --swatch: var(--swatch-red);
+  }
+
+  .sales-quick-key-swatch[data-none] {
+    background: transparent;
+    border: 1.5px dashed var(--line-strong);
+  }
+
+  /* Editor colour choice: the swatch grows to a touch target with a ring when chosen. */
+  .sales-quick-swatch-option {
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border: 1.5px solid transparent;
+    border-radius: 0.625rem;
+    cursor: pointer;
+  }
+
+  .sales-quick-swatch-option .sales-quick-key-swatch {
+    width: 1.25rem;
+    height: 1.25rem;
+    margin: 0;
+  }
+
+  .sales-quick-swatch-option:has(input:checked) {
+    border-color: var(--fg1);
+  }
+
+  .sales-quick-swatch-option:has(input:focus-visible) {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+  }
+
+  fieldset:disabled .sales-quick-swatch-option {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .sales-quick-keys-loading {
+    display: grid;
+    place-items: center;
+    min-height: 4.25rem;
+    border-radius: 0.875rem;
+  }
+
+  .sales-settlement-dock {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+    padding: 1rem;
+    border: 1.5px solid var(--line);
+    border-radius: 1.25rem;
+    background: var(--card);
+  }
+
+  .sales-dock-middle {
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+  }
+
+  /* Phones charge from the fixed checkout bar instead. */
+  .sales-dock-bottom {
+    display: none;
+  }
+
+  .sales-avatar {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 999px;
+    background: var(--surface-3);
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--fg2);
+  }
+
+  .sales-tier-key {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    border-radius: 0.6rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--fg2);
+  }
+
+  .sales-tier-key[aria-pressed='true'] {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  .sales-total-card {
+    container-type: inline-size;
+    padding: 0.875rem 1.125rem;
+    border: 1.5px solid var(--line);
+    border-radius: 1.25rem;
+    background: var(--background);
+  }
+
+  .sales-total-figure {
+    @apply font-numeric;
+    margin-top: 0.25rem;
+    font-variation-settings: 'wdth' 76;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+    color: var(--fg1);
+  }
+
+  .sales-total-breakdown {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.125rem 1rem;
+    margin-top: 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--fg2);
+  }
+
+  .sales-total-breakdown > div {
+    display: flex;
+    align-items: baseline;
+    gap: 0.375rem;
+  }
+
+  .sales-total-breakdown dd {
+    @apply font-numeric;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: var(--fg1);
+  }
+
+  .sales-total-breakdown .text-success-700 dd {
+    color: inherit;
+  }
+
+  .sales-mini-card {
+    flex: 1;
+    min-width: 0;
+    padding: 0.625rem 0.75rem;
+    border: 1.5px solid var(--line);
+    border-radius: 0.875rem;
+  }
+
+  .sales-mini-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 2.75rem;
+    margin-bottom: -0.625rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--primary);
+  }
+
+  .sales-mini-link:hover {
+    text-decoration: underline;
+  }
+
+  .sales-tender-tile {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.125rem;
+    min-width: 0;
+    min-height: 3rem;
+    padding: 0 0.25rem;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 0.875rem;
+    background: var(--card);
+    font-size: 0.71875rem;
+    font-weight: 600;
+    color: var(--fg1);
+  }
+
+  .sales-tender-tile:hover,
+  .sales-cash-key:hover,
+  .sales-secondary-key:hover:not(:disabled) {
+    border-color: var(--primary-600);
+  }
+
+  .sales-cash-key {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    min-height: 3.25rem;
+    padding: 0.375rem 0.625rem;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 0.875rem;
+    background: var(--card);
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .sales-cash-key-exact {
+    border-width: 2px;
+    border-color: var(--foreground);
+  }
+
+  .sales-cash-key small {
+    font-size: 0.71875rem;
+    font-weight: 600;
+    color: var(--fg3);
+  }
+
+  .sales-cash-key b {
+    @apply font-numeric;
+    font-size: 1.0625rem;
+    font-weight: 700;
+    color: var(--fg1);
+  }
+
+  /* Charge drawer, cash state: the change is the largest figure. */
+  .sale-pay-summary {
+    container-type: inline-size;
+  }
+
+  .sale-pay-tip {
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .sale-pay-total-figure,
+  .sale-pay-change-figure {
+    @apply font-numeric;
+    font-variation-settings: 'wdth' 76;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .sale-pay-total-figure {
+    margin-top: 0.25rem;
+    font-size: clamp(2.5rem, 12cqi, 5rem);
+    color: var(--fg1);
+  }
+
+  .sale-pay-tenders {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
+    gap: 0.5rem;
+  }
+
+  .sale-pay-tender {
+    min-height: 3.5rem;
+    font-size: 0.8125rem;
+  }
+
+  .sale-pay-bills {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .sale-pay-bill {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-width: 0;
+    min-height: 3.5rem;
+    padding: 0 0.5rem;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 0.875rem;
+    background: var(--card);
+    font-weight: 700;
+    color: var(--fg1);
+  }
+
+  .sale-pay-bill svg {
+    color: var(--success-700);
+  }
+
+  .sale-pay-bill-amount {
+    @apply font-numeric;
+    overflow: hidden;
+    font-size: 1.0625rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sale-pay-bill:hover {
+    border-color: var(--primary-600);
+  }
+
+  .sale-pay-bill[aria-pressed='true'] {
+    border: 2.5px solid var(--foreground);
+    background: var(--surface-2);
+  }
+
+  .sale-pay-received {
+    padding: 0.625rem 1rem;
+    border: 2px solid var(--primary-700);
+    border-radius: 1.25rem;
+    background: var(--background);
+  }
+
+  .sale-pay-received:focus-within {
+    box-shadow: 0 0 0 4px color-mix(in oklch, var(--primary-600) 25%, transparent);
+  }
+
+  .sale-pay-received-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+
+  .sale-pay-received-symbol,
+  .sale-pay-received-input {
+    @apply font-numeric;
+    font-size: 2.75rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--fg1);
+  }
+
+  .sale-pay-received-input {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    outline: none;
+    appearance: textfield;
+  }
+
+  .sale-pay-received-input::-webkit-inner-spin-button,
+  .sale-pay-received-input::-webkit-outer-spin-button,
+  .sale-pay-tender-amount::-webkit-inner-spin-button,
+  .sale-pay-tender-amount::-webkit-outer-spin-button,
+  .sale-pay-money-field input::-webkit-inner-spin-button,
+  .sale-pay-money-field input::-webkit-outer-spin-button {
+    margin: 0;
+    appearance: none;
+  }
+
+  .sale-pay-keypad {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .sale-pay-key {
+    @apply font-display;
+    display: grid;
+    place-items: center;
+    min-height: 3.25rem;
+    border-radius: 0.875rem;
+    background: var(--surface-3);
+    font-size: 1.375rem;
+    font-weight: 700;
+    color: var(--fg1);
+  }
+
+  .sale-pay-key:hover,
+  .sale-pay-key:active {
+    background: var(--line);
+  }
+
+  .sale-pay-change {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: end;
+    gap: 0.25rem 1rem;
+    container-type: inline-size;
+    padding: 0.875rem 1.25rem;
+    border-radius: 1.5rem;
+    background: var(--success-50);
+    color: var(--success-700);
+  }
+
+  .sale-pay-change[data-short] {
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .sale-pay-change-title {
+    padding-bottom: 0.5rem;
+    color: inherit;
+  }
+
+  .sale-pay-change-figure {
+    justify-self: end;
+    font-size: clamp(3rem, 15cqi, 6.5rem);
+  }
+
+  .sale-pay-change-ways {
+    display: flex;
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--fg2);
+  }
+
+  .sale-pay-change-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .sale-pay-change-chip {
+    @apply font-numeric;
+    padding: 0.25rem 0.625rem;
+    border-radius: 999px;
+    background: var(--card);
+    font-weight: 600;
+    color: var(--fg1);
+  }
+
+  .sale-pay-back {
+    min-height: 4rem;
+    gap: 0.5rem;
+    padding-inline: 1.25rem;
+    border-radius: 1.25rem;
+  }
+
+  .sale-pay-confirm {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
+
+  /* Charge drawer, split / credit / invoice states. */
+  .sale-pay-step-title {
+    @apply font-display;
+    font-size: 1.375rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--fg1);
+  }
+
+  .sale-pay-tender-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 4rem;
+    padding: 0.5rem 0.875rem;
+    border: 1.5px solid var(--line);
+    border-radius: 0.9375rem;
+    background: var(--background);
+  }
+
+  .sale-pay-tender-row[data-active] {
+    border-color: var(--primary-900);
+    background: var(--primary-100);
+    box-shadow: inset 0 0 0 1px var(--primary-900);
+  }
+
+  .sale-pay-tender-icon {
+    width: 1.375rem;
+    height: 1.375rem;
+    flex-shrink: 0;
+    color: var(--fg2);
+  }
+
+  .sale-pay-tender-method {
+    max-width: 100%;
+    padding: 0.125rem 0;
+    border: 0;
+    background: transparent;
+    font-weight: 600;
+    color: var(--fg1);
+  }
+
+  .sale-pay-tender-ref {
+    @apply font-mono;
+    display: block;
+    width: 100%;
+    margin-top: 0.125rem;
+    padding: 0.125rem 0;
+    border: 0;
+    border-bottom: 1px dashed var(--line-strong);
+    background: transparent;
+    font-size: 0.8125rem;
+    color: var(--fg2);
+  }
+
+  .sale-pay-tender-ref::placeholder {
+    color: var(--fg3);
+  }
+
+  .sale-pay-tender-method:focus-visible,
+  .sale-pay-tender-ref:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+    border-radius: 0.25rem;
+  }
+
+  .sale-pay-tender-amount {
+    @apply font-numeric;
+    width: 9.5rem;
+    min-width: 0;
+    padding: 0.375rem 0.625rem;
+    border: 1.5px solid var(--line);
+    border-radius: 0.75rem;
+    background: var(--card);
+    font-size: 1.375rem;
+    font-weight: 700;
+    text-align: right;
+    color: var(--fg1);
+    appearance: textfield;
+  }
+
+  .sale-pay-tender-amount:focus-visible {
+    outline: none;
+    border-color: var(--primary-700);
+    box-shadow: var(--focus-ring);
+  }
+
+  .sale-pay-split-action {
+    min-height: 2.875rem;
+    gap: 0.5rem;
+  }
+
+  .sale-pay-kv > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-height: 2.75rem;
+    border-bottom: 1.5px solid var(--line);
+    font-size: 0.96875rem;
+    color: var(--fg2);
+  }
+
+  .sale-pay-kv dd {
+    @apply font-numeric;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--fg1);
+  }
+
+  .sale-pay-kv [data-tone='ok'] dd {
+    color: var(--success-700);
+  }
+
+  .sale-pay-kv [data-tone='danger'] dd {
+    color: var(--danger-700);
+  }
+
+  .sale-pay-kv [data-tone='warning'] dd {
+    color: var(--warning-700);
+  }
+
+  .sale-pay-avatar {
+    @apply font-display;
+    background: var(--warning-500);
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: var(--operator-commit);
+  }
+
+  .sale-pay-cupo-bar {
+    display: flex;
+    height: 1.25rem;
+    overflow: hidden;
+    border-radius: 0.625rem;
+    background: var(--surface-3);
+  }
+
+  .sale-pay-cupo-owed {
+    background: var(--primary-900);
+  }
+
+  .sale-pay-cupo-sale {
+    background: var(--operator-command);
+  }
+
+  .sale-pay-cupo-bar[data-over] .sale-pay-cupo-sale {
+    background: var(--danger-600);
+  }
+
+  .sale-pay-cupo-scale {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-top: 0.375rem;
+    font-size: 0.8125rem;
+    color: var(--fg3);
+  }
+
+  .sale-pay-money-field {
+    @apply font-numeric;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    height: 3.25rem;
+    padding: 0 0.875rem;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 0.8125rem;
+    background: var(--background);
+    font-size: 1.03125rem;
+    font-weight: 600;
+    color: var(--fg1);
+  }
+
+  .sale-pay-money-field:focus-within {
+    border-color: var(--primary-700);
+    box-shadow: var(--focus-ring);
+  }
+
+  .sale-pay-money-field input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    outline: none;
+    font: inherit;
+    color: inherit;
+    appearance: textfield;
+  }
+
+  .sale-pay-money-field[data-tone='credit'] {
+    border-color: var(--primary-900);
+    background: var(--primary-100);
+  }
+
+  .sale-pay-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    font-size: 0.84375rem;
+    line-height: 1.35;
+    color: var(--fg2);
+  }
+
+  .sale-pay-note:is([data-tone='ok'], [data-tone='success']) {
+    font-weight: 600;
+    color: var(--success-700);
+  }
+
+  .sale-pay-note:is([data-tone='muted'], [data-tone='success'], [data-tone='danger']) {
+    padding: 0.625rem 0.875rem;
+    border-radius: 0.875rem;
+    background: var(--surface-3);
+  }
+
+  .sale-pay-note[data-tone='success'] {
+    background: var(--success-50);
+  }
+
+  .sale-pay-note[data-tone='danger'] {
+    font-weight: 600;
+    color: var(--danger-700);
+    background: var(--danger-50);
+  }
+
+  .sale-pay-invoice-id {
+    display: grid;
+    grid-template-columns: minmax(0, 0.6fr) minmax(0, 1.2fr);
+    gap: 0.625rem;
+  }
+
+  .sale-pay-invoice-id[data-nit] {
+    grid-template-columns: minmax(0, 0.6fr) minmax(0, 1.2fr) minmax(0, 0.45fr);
+  }
+
+  .sale-pay-invoice-id > p {
+    grid-column: 1 / -1;
+  }
+
+  .sale-pay-dv-ok {
+    position: absolute;
+    top: 50%;
+    right: 0.625rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-top: 0.125rem;
+    transform: translateY(-50%);
+    color: var(--success-700);
+  }
+
+  .sale-pay-transfer {
+    display: grid;
+    gap: 0.875rem;
+  }
+
+  .sale-pay-transfer-qr-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 1rem;
+  }
+
+  .transfer-qr {
+    flex: none;
+    width: 12.5rem;
+    aspect-ratio: 1;
+    padding: 0.5rem;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 1.125rem;
+    background: #fff;
+  }
+
+  .customer-display-transfer-qr {
+    width: min(18rem, 100%);
+  }
+
+  .transfer-qr svg,
+  .transfer-qr-pending {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .transfer-qr-pending {
+    border-radius: 0.5rem;
+    background: var(--surface-3);
+  }
+
+  .sale-pay-transfer-title {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--fg1);
+  }
+
+  .sale-pay-transfer-copy {
+    margin-top: 0.375rem;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    color: var(--fg2);
+  }
+
+  .sale-pay-transfer-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    margin-top: 0.625rem;
+  }
+
+  .sale-pay-transfer-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3125rem;
+    min-height: 2rem;
+    padding: 0 0.625rem;
+    border: 1.5px solid transparent;
+    border-radius: 1rem;
+    background: var(--surface-3);
+    font-size: 0.78125rem;
+    font-weight: 700;
+    color: var(--fg2);
+  }
+
+  .sale-pay-transfer-chip[aria-pressed='true'] {
+    border-color: var(--foreground);
+    background: var(--surface-2);
+    color: var(--fg1);
+  }
+
+  .sale-pay-transfer-reference {
+    @apply font-mono;
+    width: 100%;
+    min-width: 0;
+    padding-right: 2rem;
+    border: 0;
+    background: transparent;
+    outline: none;
+    font-size: 1.03125rem;
+    letter-spacing: 0.3em;
+    color: inherit;
+  }
+
+  @media (max-width: 30rem) {
+    .sale-pay-transfer-qr-row {
+      grid-template-columns: minmax(0, 1fr);
+      justify-items: center;
+    }
+  }
+
+  @media (max-height: 820px) {
+    .sale-pay-total-figure {
+      font-size: clamp(2.25rem, 9cqi, 3.5rem);
+    }
+
+    .sale-pay-change-figure {
+      font-size: clamp(2.5rem, 10cqi, 3.5rem);
+    }
+
+    .sale-pay-bill,
+    .sale-pay-tender {
+      min-height: 2.75rem;
+    }
+
+    .sale-pay-key {
+      min-height: 2.5rem;
+    }
+
+    .sale-pay-received {
+      padding: 0.375rem 0.875rem;
+    }
+
+    .sale-pay-received-symbol,
+    .sale-pay-received-input {
+      font-size: 1.75rem;
+    }
+
+    .sale-pay-change {
+      padding-block: 0.625rem;
+    }
+  }
+
+  /* Phones: two bill keys per row and no keyboard hints on the touch actions. */
+  @media (max-width: 639px) {
+    .sale-pay-bills {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .sale-pay-total-figure,
+    .sale-pay-change-figure {
+      font-size: 2.5rem;
+    }
+
+    .sale-pay-received-symbol,
+    .sale-pay-received-input {
+      font-size: 2rem;
+    }
+
+    .sale-pay-change {
+      padding: 0.625rem 0.875rem;
+      border-radius: 1.125rem;
+    }
+
+    .sale-pay-change-chip {
+      font-size: 0.8125rem;
+    }
+
+    .sale-pay-back,
+    .sale-pay-confirm {
+      min-height: 3.25rem;
+    }
+
+    .sale-pay-confirm {
+      font-size: 1.25rem;
+    }
+
+    .sale-pay-back .pv-kbd,
+    .sale-pay-confirm .sales-charge-kbd {
+      display: none;
+    }
+
+    .sale-pay-tender-row {
+      gap: 0.5rem;
+      padding-inline: 0.625rem;
+    }
+
+    .sale-pay-tender-amount {
+      width: 6.5rem;
+      font-size: 1.125rem;
+    }
+  }
+
+  /* Finished sale: the till is already back on the scanner. */
+  .sale-done-strip {
+    display: grid;
+    gap: 0.625rem;
+    padding: 0.75rem 1rem;
+    border-radius: 1rem;
+    background: var(--rail);
+    color: var(--rail-foreground);
+  }
+
+  .sale-done-mark {
+    width: 1.5rem;
+    height: 1.5rem;
+    flex: none;
+    color: color-mix(in oklch, var(--success-500) 55%, white);
+  }
+
+  .sale-done-meta {
+    margin-left: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--rail-muted);
+  }
+
+  .sale-done-actions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .sale-done-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0 0.5rem;
+    border: 1px solid color-mix(in oklch, var(--rail-muted) 55%, transparent);
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--rail-foreground);
+  }
+
+  .sale-done-action:hover:not(:disabled) {
+    background: color-mix(in oklch, var(--rail-foreground) 10%, transparent);
+  }
+
+  .sale-done-action:disabled {
+    opacity: 0.6;
+  }
+
+  .sales-charge-key {
+    @apply font-display;
+    width: 100%;
+    min-height: 4rem;
+    gap: 0.75rem;
+    border-radius: 1.25rem;
+    font-size: 1.625rem;
+    font-weight: 800;
+    box-shadow: 0 14px 24px -14px color-mix(in oklch, var(--cobrar) 65%, transparent);
+  }
+
+  .sales-charge-key:disabled {
+    box-shadow: none;
+  }
+
+  .sales-charge-kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.25rem;
+    height: 1.75rem;
+    border: 1px solid color-mix(in oklch, var(--cobrar-foreground) 33%, transparent);
+    border-bottom-width: 2px;
+    border-radius: 0.45rem;
+    /* A light pill keeps the small key name at 4.5:1 on the hover orange too. */
+    background: color-mix(in oklch, white 32%, transparent);
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .sales-secondary-key {
+    display: inline-flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 0.9rem;
+    background: var(--card);
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--fg1);
+  }
+
+  /* Three keys share the dock's last row; their key hints go first when it is narrow. */
+  .sales-park-row {
+    container-type: inline-size;
+  }
+
+  .sales-park-row .sales-secondary-key {
+    min-width: 0;
+  }
+
+  @container (max-width: 23rem) {
+    .sales-park-row .pv-kbd {
+      display: none;
+    }
+  }
+
+  .sales-incident-key[aria-expanded='true'] {
+    border-color: var(--warning-500);
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .sales-incident-key[aria-expanded='true'] .pv-kbd,
+  .till-incident-submit .pv-kbd {
+    border-color: currentColor;
+    background: transparent;
+    color: inherit;
+  }
+
+  /* --- Novedad sheet: tiles keyed by letter, then one short form per incident --- */
+  .till-incident-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .till-incident-title {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--fg1);
+  }
+
+  .till-incident-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.625rem;
+  }
+
+  .till-incident-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-height: 8.5rem;
+    padding: 0.875rem;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 1rem;
+    background: var(--card);
+    text-align: left;
+    color: var(--fg1);
+  }
+
+  .till-incident-tile:hover:not([aria-disabled='true']) {
+    border-color: var(--primary-600);
+  }
+
+  .till-incident-tile[aria-disabled='true'] {
+    border-style: dashed;
+    background: var(--surface-2);
+    cursor: not-allowed;
+  }
+
+  /* Doubled class: .pv-kbd is declared later in this file. */
+  .pv-kbd.till-incident-letter {
+    min-width: 2rem;
+    height: 2rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--fg1);
+  }
+
+  .till-incident-tile-label {
+    display: block;
+    font-size: 1.0625rem;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .till-incident-tile-detail {
+    display: block;
+    margin-top: 0.125rem;
+    font-size: 0.8125rem;
+    line-height: 1.3;
+    color: var(--fg2);
+  }
+
+  .till-incident-results {
+    overflow: hidden;
+    border: 1.5px solid var(--line);
+    border-radius: 0.875rem;
+  }
+
+  .till-incident-results > li + li {
+    border-top: 1px solid var(--line);
+  }
+
+  .till-incident-result {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    min-height: 3.25rem;
+    padding: 0.5rem 0.875rem;
+    text-align: left;
+  }
+
+  .till-incident-result-pick:hover,
+  .till-incident-result-pick:focus-visible {
+    background: var(--surface-2);
+    outline: none;
+  }
+
+  .till-incident-result-pick:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--ring);
+  }
+
+  .till-incident-product {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.875rem 1rem;
+    border-radius: 1rem;
+    background: var(--surface-2);
+  }
+
+  .till-incident-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .till-incident-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--fg1);
+  }
+
+  .till-incident-reason {
+    cursor: pointer;
+  }
+
+  .till-incident-submit {
+    width: 100%;
+    min-height: 3.5rem;
+    font-size: 1.0625rem;
+  }
+
+  .till-incident-tile:focus-visible,
+  .till-incident-reason:has(:focus-visible) {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 639px) {
+    .till-incident-title {
+      font-size: 1.5rem;
+    }
+
+    .till-incident-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .till-incident-tile {
+      flex-direction: row;
+      align-items: center;
+      min-height: 3.5rem;
+    }
+
+    .till-incident-tile svg {
+      display: none;
+    }
+
+    .till-incident-tile > span:last-child {
+      margin-top: 0;
+    }
+  }
+
+  /* --- Devolución sheet: receipt, line checklist, refund and approval --- */
+  .till-return-read {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.375rem;
+    height: 2.25rem;
+    padding: 0 0.75rem;
+    border-radius: 999px;
+    background: var(--success-50);
+    color: var(--success-700);
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .till-return-lines > li {
+    padding: 0.75rem 0;
+  }
+
+  .till-return-lines > li + li {
+    border-top: 1px solid var(--line);
+  }
+
+  /* On a phone the name keeps its own row and quantity and amount wrap under it. */
+  .till-return-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.75rem;
+  }
+
+  @media (min-width: 640px) {
+    .till-return-line {
+      flex-wrap: nowrap;
+    }
+  }
+
+  .till-return-check {
+    flex-shrink: 0;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.625rem;
+    accent-color: var(--primary-600);
+    cursor: pointer;
+  }
+
+  .till-return-amount {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-top: 0.5rem;
+  }
+
+  .till-return-total {
+    @apply font-numeric;
+    font-size: clamp(3rem, 6vw, 5rem);
+    font-variation-settings: 'wdth' 76;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--fg1);
+    white-space: nowrap;
+  }
+
+  .till-return-approval {
+    padding: 0.875rem 1rem;
+    border-radius: 1rem;
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .till-return-approval.is-approved {
+    background: var(--success-50);
+    color: var(--success-700);
+  }
+
+  /* Refund, approval and the keys stay at the drawer's foot while the lines scroll. */
+  .till-return-footer {
+    position: sticky;
+    bottom: -1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin: auto 0 -1.25rem;
+    padding: 0.5rem 0 1.25rem;
+    background: var(--surface);
+  }
+
+  @media (min-width: 640px) {
+    .till-return-footer {
+      bottom: -1.5rem;
+      margin-bottom: -1.5rem;
+      padding-bottom: 1.5rem;
+    }
+  }
+
+  .till-return-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  @media (max-width: 639px) {
+    .till-return-read {
+      display: none;
+    }
+
+    .till-return-actions {
+      flex-direction: column;
+    }
+  }
+
+  .sales-charge-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+
+  /* Credit and delivery stack beside a full-height Cobrar. */
+  .sales-charge-side {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .sales-charge-side > * {
+    flex: 1;
+  }
+
+  .sales-charge-side:has(> :nth-child(2)) .sales-credit-key {
+    min-height: 2.75rem;
+  }
+
+  .sales-delivery-key {
+    gap: 0.375rem;
+    padding-inline: 0.5rem;
+    white-space: normal;
+    line-height: 1.15;
+  }
+
+  .sales-charge-row .sales-charge-key {
+    gap: 0.5rem;
+    padding-inline: 0.5rem;
+    font-size: 1.1875rem;
+    white-space: nowrap;
+  }
+
+  .sales-credit-key {
+    flex-direction: column;
+    gap: 0.125rem;
+    min-height: 4rem;
+    padding-inline: 0.375rem;
+    line-height: 1.2;
+  }
+
+  .sales-secondary-key[data-active] {
+    border-color: var(--primary-900);
+    background: color-mix(in oklch, var(--primary-900) 7%, var(--card));
+  }
+
+  .sales-secondary-key:disabled {
+    opacity: 0.5;
+  }
+
+  .sales-credit-key-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 1rem;
+  }
+
+  .sales-credit-key-projection {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0 0.25rem;
+    max-width: 100%;
+    font-size: 0.75rem;
+    text-align: center;
+    white-space: normal;
+    font-weight: 500;
+    color: var(--fg2);
+  }
+
+  .sales-credit-key-projection[data-over] {
+    color: var(--danger-700);
+  }
+
+  .sales-phone-key.sales-credit-key {
+    min-height: 2.875rem;
+    padding-block: 0.25rem;
+  }
+
+  .sales-phone-key .sales-credit-key-label {
+    font-size: 0.875rem;
+  }
+
+  .sales-phone-key .sales-credit-key-projection {
+    font-size: 0.6875rem;
+  }
+
+  .sales-avatar-sm {
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.75rem;
+  }
+
+  .sales-account {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.625rem 0.75rem;
+    border: 1.5px solid var(--line);
+    border-radius: 0.875rem;
+    background: var(--card);
+  }
+
+  .sales-account-name {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+
+  .sales-account-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .sales-account-meter {
+    flex: 1;
+    min-width: 2.5rem;
+    height: 0.4375rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--surface-3);
+  }
+
+  .sales-account-meter > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--primary-900);
+  }
+
+  .sales-account-meter[data-over] > span {
+    background: var(--danger-600);
+  }
+
+  .sales-account-owed {
+    flex: none;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+    color: var(--fg2);
+  }
+
+  .sales-account-owed b {
+    @apply font-numeric;
+    font-weight: 700;
+    color: var(--fg1);
+  }
+
+  .sales-account-pay {
+    flex: none;
+    min-height: 2.75rem;
+    padding-inline: 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .sales-rx-missing {
+    border-color: var(--warning-500);
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .sales-rx-icon {
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    background: var(--primary-50);
+    color: var(--primary-700);
+  }
+
+  .sales-rx-notice {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.625rem 0.875rem;
+    border-radius: 0.875rem;
+    background: var(--surface-2);
+    font-size: 0.8125rem;
+    color: var(--fg2);
+  }
+
+  .sales-shortcut-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem 1.25rem;
+    padding: 0.5rem 0.875rem;
+    border: 1.5px solid var(--line);
+    border-radius: 1rem;
+    background: var(--card);
+    font-size: 0.8125rem;
+    color: var(--fg2);
+  }
+
+  .sales-shortcut {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    white-space: nowrap;
+  }
+
+  /* Under a wide desktop the dock is narrow: tighten its keys to fit. */
+  @media (max-width: 1535px) {
+    .sales-tender-tile {
+      padding: 0;
+      font-size: 0.6875rem;
+    }
+
+    .sales-cash-key {
+      padding-inline: 0.5rem;
+    }
+
+    .sales-cash-key small {
+      font-size: 0.6875rem;
+    }
+
+    .sales-cash-verb {
+      display: none;
+    }
+
+    .sales-cash-key b {
+      font-size: 0.875rem;
+    }
+
+    .sales-charge-key {
+      font-size: 1.375rem;
+    }
+  }
+
+  /* A narrow ticket drops the line number and the unit to keep the name. */
+  .sales-ticket-column {
+    container: ticket / inline-size;
+  }
+
+  @container ticket (max-width: 46rem) {
+    .sales-ticket-head,
+    .sales-ticket-row {
+      grid-template-columns: minmax(0, 1fr) 9.25rem 5rem 6.25rem 2.75rem;
+    }
+
+    .sales-ticket-head > :first-child,
+    .sales-ticket-head > :nth-child(4),
+    .sales-ticket-head-label,
+    .sales-head-action-label,
+    .sales-ticket-index,
+    .sales-ticket-unit {
+      display: none;
+    }
+
+    .sales-ticket-details {
+      margin-left: 0;
+    }
+  }
+
+  .sales-ticket-tab:focus-visible,
+  .sales-tender-tile:focus-visible,
+  .sales-cash-key:focus-visible,
+  .sales-secondary-key:focus-visible,
+  .sales-quick-key:focus-visible,
+  .sales-quick-choose:focus-visible,
+  .sales-tier-key:focus-visible,
+  .sales-mini-link:focus-visible,
+  .sales-last-read-undo:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  .sales-last-read-undo:focus-visible {
+    outline-color: var(--rail-foreground);
+  }
+
+  @media (min-width: 1024px) {
+    /* Clip, not hidden: hidden makes the shell a scroll container, and the
+     * dock's sticky total and keys would never stick to the viewport. */
+    .app-shell:has(.sales-pos-shell) {
+      overflow-x: clip;
+    }
+
+    .sales-register-strip {
+      flex-shrink: 0;
+      flex-wrap: nowrap;
+      min-height: 3.5rem;
+    }
+
+    .sales-workbench-grid {
+      grid-template-columns: minmax(0, 1fr) clamp(21.5rem, 34%, 32rem);
+    }
+
+    /* One row under the ticket; it scrolls sideways when the keys outnumber it. */
+    .sales-quick-keys {
+      grid-auto-columns: minmax(7.25rem, 1fr);
+      grid-auto-flow: column;
+      grid-template-columns: none;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    .sales-banner-slot {
+      flex-shrink: 0;
+      height: 4.75rem;
+    }
+
+    .sales-banner-slot > * {
+      height: 100%;
+    }
+
+    /* The finished-sale strip shows only on an empty ticket, so it may grow. */
+    .sales-banner-slot:has(.sale-done-strip) {
+      height: auto;
+    }
+
+    .sales-last-read-idle {
+      display: flex;
+    }
+
+    /* The page scrolls on short screens: the total and the keys that charge
+     * hold their place while the ticket and the rest of the dock move. The
+     * spread shadow hides what scrolls past in the dock padding. */
+    .sales-dock-top,
+    .sales-dock-bottom {
+      position: sticky;
+      z-index: 2;
+      background: var(--card);
+    }
+
+    .sales-dock-top {
+      top: 6.75rem;
+      box-shadow: 0 -1rem 0 0 var(--card);
+    }
+
+    .sales-dock-bottom {
+      bottom: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.625rem;
+      box-shadow: 0 1rem 0 0 var(--card);
+    }
+
+    .sales-shortcut-strip {
+      flex-shrink: 0;
+      flex-wrap: nowrap;
+    }
+  }
+
+  /* `pos:` — the shell is bounded, so the dock pins by layout instead. */
+  @media (min-width: 1280px) and (min-height: 900px) {
+    .sales-workbench-grid {
+      grid-template-rows: minmax(0, 1fr);
+    }
+
+    .sales-ticket-head {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--operator-canvas);
+    }
+
+    .sales-settlement-dock {
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .sales-dock-top,
+    .sales-dock-bottom {
+      position: static;
+      flex-shrink: 0;
+      box-shadow: none;
+    }
+
+    .sales-dock-middle {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+    }
+  }
+
+  /* ==========================================================================
    * 8. FORMS
    *
    * .label          — Uppercase micro-label above inputs (REGISTER NAME, EMAIL).
@@ -634,8 +3295,7 @@
   .select-trigger:focus {
     @apply bg-white;
     border-color: color-mix(in oklch, var(--operator-signal) 72%, var(--line));
-    box-shadow:
-      0 0 0 0.2rem color-mix(in oklch, var(--operator-signal) 14%, transparent);
+    box-shadow: 0 0 0 0.2rem color-mix(in oklch, var(--operator-signal) 14%, transparent);
   }
 
   .dark .input:focus,
@@ -1115,8 +3775,7 @@
   .pv-input.focus {
     border-color: color-mix(in oklch, var(--operator-signal) 72%, var(--line));
     background: var(--surface);
-    box-shadow:
-      0 0 0 0.2rem color-mix(in oklch, var(--operator-signal) 14%, transparent);
+    box-shadow: 0 0 0 0.2rem color-mix(in oklch, var(--operator-signal) 14%, transparent);
     outline: none;
   }
   .pv-input.error {
@@ -1364,11 +4023,21 @@
     box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
     transition: left 160ms;
   }
-  .pv-switch.on {
+  .pv-switch.on,
+  .pv-switch:checked {
     background: var(--primary);
   }
-  .pv-switch.on::after {
+  .pv-switch.on::after,
+  .pv-switch:checked::after {
     left: 21px;
+  }
+  input.pv-switch {
+    appearance: none;
+    margin: 0;
+  }
+  input.pv-switch:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
 
   /* --- Accordion (.pv-acc) — vault de credenciales --- */
@@ -1526,8 +4195,7 @@
     border-radius: 11px;
     border: 1px solid color-mix(in oklch, var(--strip-ink) 20%, var(--line));
     background: var(--strip-surface);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.62);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.62);
   }
   .pv-strip .ic {
     display: inline-flex;
@@ -1588,8 +4256,7 @@
     --strip-ink: var(--operator-positive-ink);
   }
   .dark .pv-strip {
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.08);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
   }
 
   /* --- Readiness checklist (.pv-check) --- */
@@ -1767,100 +4434,22 @@
     margin-top: 1px;
   }
 
-  /* --- POS táctil (, §06) — keycap, total dominante, tile de pago ---
-   * El mockup §06 usa el Button tipado (outline para steppers, primary para
-   * Cobrar) + estas 3 piezas reutilizables.
-   * El panel "Total a pagar" es tinta fija (secondary-950) con texto claro vía
-   * --primary-foreground (token, no hex) — VERIFICAR en smoke .dark (§19) que
-   * secondary-950 siga oscuro; si no, añadir override .dark .pv-total. */
+  /* --- POS keycap and payment tile --- */
   .pv-kbd {
-    font-family: var(--font-mono);
-    font-size: 0.82em;
-    padding: 2px 6px;
-    border-radius: 6px;
-    background: color-mix(in oklch, var(--surface-3) 70%, transparent);
-    border: 1px solid color-mix(in oklch, var(--line-strong) 35%, transparent);
-    color: var(--secondary-800);
-  }
-
-  .pv-total {
-    /* Lets the total figure scale to the panel instead of the viewport. */
-    container-type: inline-size;
-    border-radius: 18px;
-    padding: 18px;
-    background: var(--secondary-950);
-    color: var(--primary-foreground);
-  }
-  .pv-total .lbl {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    color: color-mix(in oklch, var(--primary-foreground) 70%, transparent);
-  }
-  .pv-total .fig {
-    font-family: var(--font-display);
-    font-weight: 400;
-    font-size: 36px;
-    letter-spacing: -0.02em;
-    margin-top: 6px;
-    font-variant-numeric: tabular-nums;
-    /* Last resort for totals wider than any panel. */
-    overflow-wrap: anywhere;
-  }
-  /* A nine-digit COP total at 36px is wider than a 320px phone panel. Below
-   * the two-column layout, scale the figure with the panel; desktop columns
-   * keep the fixed display size. */
-  @media (max-width: 1023px) {
-    .pv-total .fig {
-      font-size: min(36px, 13cqi);
-    }
-  }
-  .pv-total .brk {
-    margin-top: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    font-size: 12.5px;
-    color: color-mix(in oklch, var(--primary-foreground) 78%, transparent);
-  }
-  .pv-total .brk .ln {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    justify-content: space-between;
-  }
-  .pv-total .brk .amt {
+    justify-content: center;
+    min-width: 1.6em;
     font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* §06/§19 tinta dominante — en dark, --secondary-950 se invierte a casi-blanco
-   * (theme.css .dark lo vuelve oklch L≈0.97) y --primary-foreground se vuelve
-   * oscuro (L≈0.22), lo que rompería el panel a fondo-claro/texto-oscuro. El
-   * override mantiene la intención "tinta": fondo OSCURO (--secondary-100, que en
-   * dark es L≈0.28, elevado sobre el card L≈0.225) + texto CLARO (--secondary-950,
-   * que en dark es el casi-blanco). lbl/brk reusan el mismo casi-blanco atenuado. */
-  .dark .pv-total {
-    background: var(--secondary-100);
-    color: var(--secondary-950);
-  }
-  .dark .pv-total .lbl {
-    color: color-mix(in oklch, var(--secondary-950) 70%, transparent);
-  }
-  .dark .pv-total .brk {
-    color: color-mix(in oklch, var(--secondary-950) 78%, transparent);
-  }
-
-  .btn-outline.tile {
-    height: 64px;
-    min-height: 64px;
-    flex-direction: column;
-    gap: 5px;
-  }
-  .btn-outline.tile.on {
-    border-color: var(--primary-400);
-    background: var(--primary-50);
-    color: var(--primary-800);
+    font-weight: 500;
+    font-size: 0.8em;
+    line-height: 1.5;
+    padding: 0 0.4em;
+    border-radius: 7px;
+    background: var(--surface-3);
+    border: 1px solid var(--line-strong);
+    border-bottom-width: 2px;
+    color: var(--fg2);
   }
 }
 
@@ -2462,255 +5051,6 @@
   }
 }
 
-@layer components {
-  .sales-scanner-ready > span {
-    width: 0.45rem;
-    height: 0.45rem;
-    border-radius: 999px;
-    background: var(--success-500);
-    box-shadow: 0 0 0 0.28rem color-mix(in oklch, var(--success-500) 13%, transparent);
-  }
-
-  .sales-scan-stage {
-    position: relative;
-  }
-
-  .sales-scan-runway {
-    position: relative;
-    height: 100%;
-    border-radius: 1.55rem;
-    background:
-      linear-gradient(white, white) padding-box,
-      linear-gradient(110deg, rgb(34 76 111 / 0.2), rgb(218 129 82 / 0.22)) border-box;
-    border: 1px solid transparent;
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.92),
-      0 1rem 2.4rem -2rem rgb(14 38 59 / 0.45);
-  }
-
-  .sales-scan-label-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-  }
-
-  .sales-scanner-ready {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    font-size: 0.57rem;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--success-700);
-  }
-
-  .sales-scan-input .input {
-    height: 3.35rem;
-    padding-left: 2.9rem;
-    border-color: color-mix(in oklch, var(--primary-300) 68%, transparent);
-    border-radius: 1.15rem;
-    font-size: 0.96rem;
-    background: #fbfaf7;
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.9),
-      inset 0 0 0 1px rgb(26 57 83 / 0.025);
-  }
-
-  .sales-scan-input .input:focus {
-    border-color: color-mix(in oklch, var(--primary-500) 78%, transparent);
-    box-shadow:
-      0 0 0 0.24rem color-mix(in oklch, var(--primary-300) 18%, transparent),
-      inset 0 1px 0 rgb(255 255 255 / 0.9);
-  }
-
-  .sales-scan-submit {
-    display: inline-flex;
-    min-height: 3.35rem;
-    align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    padding: 0.75rem 1.35rem;
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: #f9f5ed;
-    background: #17334d;
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.16),
-      0 0.8rem 1.5rem -1.1rem rgb(11 31 49 / 0.7);
-    transition:
-      transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
-      background-color 420ms cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow 420ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  .sales-scan-submit-key {
-    display: grid;
-    min-width: 2rem;
-    height: 1.65rem;
-    margin-left: 0.65rem;
-    place-items: center;
-    border-radius: 0.4rem;
-    font-family: var(--font-mono);
-    font-size: 0.62rem;
-    font-weight: 800;
-    letter-spacing: -0.04em;
-    color: #17334d;
-    background: #f4c293;
-    box-shadow:
-      inset 0 -2px 0 rgb(115 65 28 / 0.22),
-      inset 0 1px 0 rgb(255 255 255 / 0.48);
-    transition: transform 180ms ease;
-  }
-
-  .sales-scan-submit:hover {
-    transform: translateY(-1px);
-    background: #204869;
-  }
-
-  .sales-scan-submit:hover .sales-scan-submit-key {
-    transform: translateY(-1px);
-  }
-
-  .sales-scan-submit:active {
-    transform: scale(0.98);
-  }
-
-  .sales-scan-hint {
-    padding-left: 0.25rem;
-  }
-
-  .sales-utility-dock {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.35rem;
-    min-width: 14rem;
-    padding: 0.35rem;
-    border-radius: 1.55rem;
-    background: linear-gradient(145deg, rgb(238 236 230 / 0.9), rgb(251 249 244 / 0.96));
-    box-shadow:
-      inset 0 0 0 1px color-mix(in oklch, var(--line) 58%, transparent),
-      inset 0 1px 0 rgb(255 255 255 / 0.85);
-  }
-
-  .sales-utility-dock-has-display {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .sales-utility-dock > :nth-child(1),
-  .sales-utility-dock > :nth-child(2) {
-    grid-column: 1 / -1;
-  }
-
-  .sales-utility-dock > button {
-    border-color: transparent;
-    background: rgb(255 255 255 / 0.62);
-    box-shadow: inset 0 0 0 1px rgb(20 45 67 / 0.055);
-    transition:
-      transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
-      background-color 420ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  .sales-utility-dock > button:hover {
-    transform: translateX(-2px);
-    background: white;
-  }
-
-  .sales-workbench-grid {
-    position: relative;
-    isolation: isolate;
-  }
-
-  .sales-workbench-grid::before {
-    position: absolute;
-    z-index: -1;
-    inset: 1.25rem 3rem -0.5rem 3rem;
-    border-radius: 2.5rem;
-    content: '';
-    background: linear-gradient(110deg, rgb(31 68 100 / 0.06), rgb(218 129 82 / 0.065));
-    filter: blur(1.5rem);
-  }
-
-  .sales-ledger-card,
-  .sales-settlement-dock {
-    border-color: transparent;
-    border-radius: 2rem;
-    background: color-mix(in oklch, var(--surface) 96%, #f6f0e6);
-    box-shadow:
-      inset 0 0 0 1px color-mix(in oklch, var(--line) 64%, transparent),
-      inset 0 1px 0 rgb(255 255 255 / 0.9),
-      0 1.6rem 3rem -2.55rem rgb(17 42 64 / 0.52);
-  }
-
-  .sales-ledger-card {
-    position: relative;
-  }
-
-  .sales-ledger-card::before {
-    position: absolute;
-    top: 0;
-    right: 2rem;
-    left: 2rem;
-    height: 0.2rem;
-    border-radius: 0 0 999px 999px;
-    content: '';
-    background: linear-gradient(90deg, transparent, var(--primary-500), transparent);
-    opacity: 0.58;
-  }
-
-  .sales-settlement-dock {
-    position: relative;
-    transform: translateY(0.45rem);
-    background:
-      radial-gradient(circle at 100% 0%, rgb(234 195 157 / 0.24), transparent 26%),
-      color-mix(in oklch, var(--surface) 96%, #f7f1e8);
-  }
-
-
-  .sales-settlement-dock .pv-total {
-    position: relative;
-    overflow: visible;
-    border-radius: 1.45rem;
-    background:
-      radial-gradient(circle at 88% 10%, rgb(99 151 188 / 0.2), transparent 28%),
-      linear-gradient(145deg, #0d1823, #132a3d);
-  }
-
-  .sales-settlement-dock .pv-total::after {
-    position: absolute;
-    right: 1rem;
-    bottom: -0.34rem;
-    left: 1rem;
-    height: 0.68rem;
-    content: '';
-    background: radial-gradient(circle, var(--surface) 0.2rem, transparent 0.22rem) 0 0 / 0.68rem
-      0.68rem repeat-x;
-  }
-
-  .sales-empty-tape {
-    position: relative;
-    overflow: hidden;
-    border: 0;
-    background:
-      radial-gradient(circle at 0 50%, var(--surface) 0.36rem, transparent 0.39rem) -0.35rem 0 /
-        0.75rem 1.2rem repeat-y,
-      radial-gradient(circle at 100% 50%, var(--surface) 0.36rem, transparent 0.39rem)
-        calc(100% + 0.35rem) 0 / 0.75rem 1.2rem repeat-y,
-      linear-gradient(135deg, rgb(245 242 235 / 0.92), rgb(251 249 245 / 0.98));
-    box-shadow:
-      inset 0 0 0 1px color-mix(in oklch, var(--line) 55%, transparent),
-      inset 0 1px 0 rgb(255 255 255 / 0.9);
-  }
-
-  .dark .sales-scan-runway,
-  .dark .sales-ledger-card,
-  .dark .sales-settlement-dock {
-    color: var(--secondary-950);
-    background: var(--operator-panel);
-  }
-}
-
 /* ==========================================================================
  * OPERATOR CONTROL GRAMMAR
  *
@@ -2833,19 +5173,9 @@
 
 @layer components {
   main:has(.sales-pos-shell) {
-    --pos-canvas: var(--operator-canvas);
-    --pos-panel: var(--operator-panel);
-    --pos-panel-muted: var(--operator-panel-muted);
-    --pos-ink: #10283a;
-    --pos-signal: var(--operator-signal);
-    --pos-command: var(--operator-command);
     position: relative;
     min-height: calc(100vh - 7rem);
-    background-color: var(--pos-canvas);
-    background-image:
-      linear-gradient(var(--operator-grid) 1px, transparent 1px),
-      linear-gradient(90deg, var(--operator-grid) 1px, transparent 1px);
-    background-size: 2rem 2rem;
+    background-color: var(--operator-canvas);
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.72);
   }
 
@@ -2857,148 +5187,6 @@
       inset 0 -2px 0 rgb(20 45 63 / 0.07),
       0 1rem 2.2rem -1.8rem rgb(10 31 46 / 0.46);
   }
-
-  .sales-scan-runway {
-    border-radius: 1.05rem;
-    border: 1px solid rgb(24 57 79 / 0.16);
-    background: var(--pos-panel);
-    box-shadow:
-      inset 0 1px 0 white,
-      0 0.9rem 1.7rem -1.6rem rgb(14 38 59 / 0.5);
-  }
-
-  .sales-scan-input .input {
-    border-radius: 0.72rem;
-    border-color: rgb(24 73 104 / 0.28);
-    background: var(--pos-panel-muted);
-    box-shadow:
-      inset 0 -2px 0 rgb(18 47 67 / 0.08);
-  }
-
-  .sales-scan-input .input:focus {
-    background: var(--pos-panel);
-    box-shadow:
-      0 0 0 0.2rem rgb(38 173 122 / 0.14);
-  }
-
-  .sales-scan-submit {
-    border-radius: 0.72rem;
-    padding-inline: 1.15rem 0.7rem;
-  }
-
-  .sales-utility-dock {
-    border-radius: 1.05rem;
-    border: 1px solid rgb(24 57 79 / 0.13);
-    background: var(--pos-panel-muted);
-    box-shadow:
-      inset 0 2px 0 rgb(17 46 66 / 0.055),
-      inset 0 -1px 0 white;
-  }
-
-  .sales-utility-dock > button,
-  .sales-utility-dock > button:hover {
-    border-color: rgb(24 57 79 / 0.14);
-    border-radius: 0.68rem;
-    background: var(--pos-panel);
-  }
-
-  .sales-utility-dock > button[aria-pressed='true'] {
-    color: #f8fbfb;
-    border-color: #14364e;
-    background: #173d57;
-    box-shadow:
-      inset 0 -2px 0 rgb(3 18 29 / 0.42);
-  }
-
-  .sales-ledger-card,
-  .sales-settlement-dock {
-    border-radius: 1.2rem;
-    background: var(--pos-panel);
-    box-shadow:
-      inset 0 0 0 1px rgb(24 57 79 / 0.14),
-      inset 0 1px 0 white,
-      0 1.4rem 2.6rem -2.35rem rgb(12 35 51 / 0.58);
-  }
-
-  .sales-ledger-card::before {
-    right: 1.2rem;
-    left: 1.2rem;
-    height: 0.24rem;
-    border-radius: 0;
-    background: linear-gradient(
-      90deg,
-      var(--pos-signal) 0 22%,
-      var(--primary-600) 22% 78%,
-      var(--pos-command) 78%
-    );
-    opacity: 0.86;
-  }
-
-  .sales-settlement-dock {
-    background: linear-gradient(180deg, rgb(242 165 99 / 0.08), transparent 20%), var(--pos-panel);
-  }
-
-
-  .sales-settlement-dock .pv-total {
-    border-radius: 0.85rem;
-    background: linear-gradient(145deg, #102b3f, #0b1f2e);
-  }
-
-  .sales-primary-control {
-    min-height: 3.25rem;
-    border-radius: 0.72rem;
-    box-shadow:
-      inset 0 -3px 0 rgb(3 15 25 / 0.52),
-      inset 0 1px 0 rgb(255 255 255 / 0.15),
-      0 0.85rem 1.5rem -1rem rgb(8 30 46 / 0.72);
-  }
-
-  .sales-empty-tape {
-    border-radius: 0.78rem;
-    background: var(--pos-panel-muted);
-  }
-}
-
-@media (max-width: 1279px) {
-  .sales-settlement-dock {
-    transform: none;
-  }
-}
-
-@media (min-width: 1024px) {
-  .sales-scan-input .input,
-  .sales-scan-submit {
-    height: 2.75rem;
-    min-height: 2.75rem;
-  }
-
-  .sales-scan-submit {
-    padding-block: 0;
-  }
-
-  .sales-utility-dock {
-    display: flex;
-    min-width: 0;
-    flex-shrink: 0;
-    padding: 0.25rem;
-  }
-
-  .sales-utility-dock > button {
-    min-width: 2.75rem;
-    min-height: 2.75rem;
-    padding-inline: 0.5rem;
-  }
-}
-
-@media (max-width: 767px) {
-  .sales-utility-dock {
-    min-width: 0;
-  }
-
-  .sales-ledger-card,
-  .sales-settlement-dock {
-    border-radius: 1.65rem;
-  }
 }
 
 /* The shell header owns the page title; the heading stays for assistive tech and in-page focus. */
@@ -3009,14 +5197,6 @@
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sales-scan-submit,
-  .sales-scan-submit-key,
-  .sales-utility-dock > button {
-    transition: none;
-  }
 }
 
 /* ==========================================================================
@@ -3053,18 +5233,6 @@
     inset 0 -2px 0 color-mix(in oklch, var(--operator-key-edge) 54%, transparent),
     var(--shadow-panel);
   animation: design-system-rise 760ms var(--design-system-ease) both;
-}
-
-.design-system-hero::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(var(--operator-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--operator-grid) 1px, transparent 1px);
-  background-size: 2rem 2rem;
-  mask-image: linear-gradient(90deg, transparent, black 48%, black);
 }
 
 .design-system-hero-copy {
@@ -4200,11 +6368,10 @@
   .btn-ghost,
   .btn-success,
   .btn-danger,
+  .btn-charge,
   .input,
   .select-trigger,
   .pv-switch,
-  .sales-scan-submit,
-  .sales-scan-submit-key,
   .design-system-role-card,
   .design-system-setting-row {
     transition: none !important;
@@ -4237,8 +6404,7 @@
     box-shadow: none;
   }
 
-  .modal-shell::before,
-  .design-system-hero::before {
+  .modal-shell::before {
     display: none;
   }
 
@@ -4248,6 +6414,7 @@
   .btn-ghost,
   .btn-success,
   .btn-danger,
+  .btn-charge,
   .input,
   .select-trigger,
   .design-system-setting-row {

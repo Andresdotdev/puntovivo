@@ -23,7 +23,7 @@ vi.mock('@/components/feedback/ToastProvider', () => ({
 vi.mock('@/lib/trpc', () => ({
   trpc: { useUtils: () => ({}) },
 }));
-vi.mock('@/lib/invalidateGroups', () => ({
+vi.mock('@/lib/invalidateGroups', async importOriginal => ({
   invalidateCommittedGroups: async (utils: unknown, pickers: unknown[]) => {
     try {
       await mocks.invalidateGroups(utils, pickers);
@@ -33,6 +33,8 @@ vi.mock('@/lib/invalidateGroups', () => ({
     }
   },
   INVENTORY_RESERVATION_INVALIDATIONS: [],
+  RESTAURANT_TABLE_INVALIDATIONS: (await importOriginal<typeof import('@/lib/invalidateGroups')>())
+    .RESTAURANT_TABLE_INVALIDATIONS,
 }));
 vi.mock('@/lib/translateServerError', () => ({
   translateServerError: () => 'translated error',
@@ -68,15 +70,20 @@ function workspace(overrides: Partial<CartWorkspace> = {}): CartWorkspace {
     serverSaleId: null,
     serverSaleNumber: null,
     serverCustomerId: null,
+    serverCustomerName: null,
     sourceQuotationId: null,
     sourceQuotationNumber: null,
     sourceQuotationSiteId: null,
     sourceQuotationCustomerId: null,
     sourceQuotationCustomerName: null,
+    sourceQuotationValidUntil: null,
+    deliveryRequested: false,
     sourceReturnId: null,
     sourceReturnSaleNumber: null,
     sourceReturnCustomerId: null,
     sourceReturnCustomerName: null,
+    customerId: null,
+    customerName: null,
     label: null,
     checkoutStartedAt: '2026-08-28T12:00:00.000Z',
     priceTier: 2,
@@ -101,7 +108,11 @@ function paymentValues(): SalePaymentValues {
   };
 }
 
-function setup(activeWorkspace: CartWorkspace, resumedResult?: Record<string, unknown>) {
+function setup(
+  activeWorkspace: CartWorkspace,
+  resumedResult?: Record<string, unknown>,
+  onResumedForCharge?: (saleId: string) => void
+) {
   const create = vi.fn(async () => ({ id: 'sale-created' }));
   const completeDraft = vi.fn(async () => ({ id: 'sale-completed' }));
   const suspend = vi.fn(async () => ({ id: activeWorkspace.serverSaleId ?? 'sale-created' }));
@@ -144,6 +155,7 @@ function setup(activeWorkspace: CartWorkspace, resumedResult?: Record<string, un
       isPending: false,
       mutateAsync: openRestaurantCheck,
     } as unknown as UseSalesFlowsParams['openRestaurantCheckMutation'],
+    onResumedForCharge,
   };
   const hook = renderHook(() => useSalesFlows(params));
   return {
@@ -266,6 +278,18 @@ describe('useSalesFlows explicit price tier forwarding', () => {
 
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ status: 'draft', priceTier: 2 }));
     expect(suspend).toHaveBeenCalledWith({ saleId: 'sale-created', label: undefined });
+  });
+
+  it('keeps the attached customer on a suspended draft', async () => {
+    const active = workspace({ customerId: 'cust-1', customerName: 'María López' });
+    useCartWorkspaceStore.setState({ workspaces: { [active.id]: active }, activeId: active.id });
+    const { result, create } = setup(active);
+
+    await act(() => result.current.handleSuspendConfirm());
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'draft', customerId: 'cust-1' })
+    );
   });
 
   it('opens a restaurant check atomically with the active price tier', async () => {
@@ -400,7 +424,9 @@ describe('useSalesFlows explicit price tier forwarding', () => {
       id: 'draft-refresh-failure',
       saleNumber: 'VTA-REFRESH',
       suspendedLabel: 'Mesa 8',
-      customerId: null,
+      customerId: 'customer-acme',
+      customerName: 'Acme SAS',
+      customerNameSnapshot: 'Acme',
       priceTier: 1,
       items: [
         {
@@ -438,6 +464,9 @@ describe('useSalesFlows explicit price tier forwarding', () => {
     const state = useCartWorkspaceStore.getState();
     expect(state.activeId ? state.workspaces[state.activeId] : null).toMatchObject({
       serverSaleId: resumed.id,
+      serverCustomerId: 'customer-acme',
+      // The name frozen on the sale wins over the current catalog name.
+      serverCustomerName: 'Acme',
       label: 'Mesa 8',
       items: [expect.objectContaining({ key: 'product-1:unit-1:server:line-refresh' })],
     });
@@ -488,6 +517,7 @@ describe('useSalesFlows explicit price tier forwarding', () => {
     expect(useCartWorkspaceStore.getState().workspaces[resumedWorkspace.id]).toMatchObject({
       serverSaleNumber: 'VTA-REFRESHED',
       serverCustomerId: null,
+      serverCustomerName: null,
       priceTier: 3,
       items: [],
     });
@@ -592,6 +622,52 @@ describe('useSalesFlows explicit price tier forwarding', () => {
       'product-1:unit-1:server:line-price-249',
     ]);
     expect(active?.items.every(item => item.priceEdited === true)).toBe(true);
+  });
+
+  it('asks to charge a resumed check only after its ticket is hydrated', async () => {
+    const resumed = {
+      id: 'check-charge',
+      saleNumber: 'VTA-CHARGE',
+      customerId: null,
+      priceTier: 1,
+      items: [
+        {
+          id: 'line-charge',
+          productId: 'product-1',
+          productName: 'Ajiaco',
+          productSku: 'AJ-1',
+          unitId: 'unit-1',
+          unitName: 'Unit',
+          unitEquivalence: 1,
+          quantity: 1,
+          unitPrice: 32_000,
+          priceEdited: false,
+          discount: 0,
+          taxRate: 8,
+          taxKind: 'inc',
+          tracksStock: true,
+        },
+      ],
+    };
+    const onResumedForCharge = vi.fn();
+    const { result } = setup(workspace(), resumed, onResumedForCharge);
+    const selection = {
+      id: resumed.id,
+      label: 'Mesa 7',
+      tableId: 'table-7',
+      suspendedAt: '2026-11-21T19:00:00.000Z',
+      resumedDeviceId: null,
+    };
+
+    await act(() => result.current.handleResumeFromPanel(selection));
+    expect(onResumedForCharge).not.toHaveBeenCalled();
+
+    await act(() => result.current.handleResumeFromPanel(selection, { charge: true }));
+    expect(onResumedForCharge).toHaveBeenCalledWith('check-charge');
+    const state = useCartWorkspaceStore.getState();
+    expect(state.activeId ? state.workspaces[state.activeId]?.items[0] : null).toMatchObject({
+      taxKind: 'inc',
+    });
   });
 
   it('re-suspends a committed resume when local hydration fails', async () => {

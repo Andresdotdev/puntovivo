@@ -14,6 +14,7 @@ import { CompanyCoFiscalCard } from './CompanyCoFiscalCard';
 import { CompanyCoNumberingCard } from './CompanyCoNumberingCard';
 import { CompanyLocaleSettingsCard } from './CompanyLocaleSettingsCard';
 import { CompanyModulesCard } from './CompanyModulesCard';
+import { CompanyRegisterZonesCard } from './CompanyRegisterZonesCard';
 import { CompanyMxFiscalCard } from './CompanyMxFiscalCard';
 import { CompanyPaymentsCard } from './CompanyPaymentsCard';
 import { CompanyPricingSettingsCard } from './CompanyPricingSettingsCard';
@@ -29,6 +30,7 @@ import { CompanySyncCard } from './CompanySyncCard';
 import { CompanyTelemetryCard } from './CompanyTelemetryCard';
 import { CompanyDataRetentionCard } from './CompanyDataRetentionCard';
 import { CompanyThemeSettingsCard } from './CompanyThemeSettingsCard';
+import { CompanyTransferDestinationsCard } from './CompanyTransferDestinationsCard';
 import { CompanyTraySettingsCard } from './CompanyTraySettingsCard';
 
 // backup and recovery modals are needed only on the data tab.
@@ -239,11 +241,13 @@ export function CompanySettingsPanels({
       {activeTab === 'modules' && (
         <div className="space-y-6">
           <CompanyModulesCard />
+          <CompanyRegisterZonesCard />
         </div>
       )}
 
       {activeTab === 'payments' && (
         <div className="space-y-6">
+          <CompanyTransferDestinationsCard />
           <CompanyPaymentsCard />
         </div>
       )}

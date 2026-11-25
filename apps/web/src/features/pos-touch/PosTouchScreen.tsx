@@ -41,6 +41,7 @@ import {
   useRef,
   useState,
   type Dispatch,
+  type MouseEvent,
   type SetStateAction,
 } from 'react';
 import { useForm } from 'react-hook-form';
@@ -51,15 +52,29 @@ import { keepPreviousData } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
+import { PageLoadingState } from '@/components/feedback/LoadingState';
 import { useDebouncedValue } from '@/hooks';
 import { useTenant } from '@/features/tenant/TenantProvider';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { invalidateCommittedGroups, SALE_COMPLETION_INVALIDATIONS } from '@/lib/invalidateGroups';
 import { trpc } from '@/lib/trpc';
 import { useCriticalMutation } from '@/lib/useCriticalMutation';
-import { applyPriceTier, mergeCartItem, type SaleCartItem } from '@/features/sales/saleCart';
-import { getCartSummary } from '@/features/sales/saleCartTotals';
+import {
+  applyPriceTier,
+  mergeBarcodeCartItem,
+  mergeCartItem,
+  type SaleCartItem,
+} from '@/features/sales/saleCart';
+import { getCartSummary, getPayableCartTotal } from '@/features/sales/saleCartTotals';
+import { useResolvedLocale } from '@/features/locale/LocaleProvider';
 import { selectionFromHydratedProduct } from '@/features/sales/productSelection';
+import { QuickKeyValueForm } from '@/features/sales/QuickKeyValueForm';
+import { useWeighedItem } from '@/features/sales/useWeighedItem';
+import {
+  useQuickTileSelection,
+  useSiteQuickKeys,
+  type QuickTile,
+} from '@/features/sales/siteQuickKeys';
 import {
   buildElectronicInvoiceRequest,
   EMPTY_INVOICE_BUYER,
@@ -67,12 +82,13 @@ import {
 import type { ElectronicInvoiceFormValues } from '@/features/sales/salePaymentModal.types';
 import { useElectronicInvoiceAvailability } from '@/features/sales/useElectronicInvoiceAvailability';
 import { SaleElectronicInvoiceSection } from '@/features/sales/LazySaleElectronicInvoiceSection';
-import type { Product } from '@/types';
+import type { Product, ProductSearchSelection } from '@/types';
 import { translateServerError } from '@/lib/translateServerError';
 import { onErrorToast } from '@/lib/mutationHelpers';
 import { useIsModuleActive } from '@/features/modules';
 import { PosTouchCategoryTabs, type PosTouchCategoryOption } from './PosTouchCategoryTabs';
 import { PosTouchProductGrid } from './PosTouchProductGrid';
+import { PosTouchQuickKeyGrid } from './PosTouchQuickKeyGrid';
 import { PosTouchCartSidebar, type PosTouchCustomer } from './PosTouchCartSidebar';
 import { useEmbeddedServerState } from '@/hooks/useEmbeddedServerState';
 
@@ -81,8 +97,8 @@ const CATALOG_SEARCH_DEBOUNCE_MS = 250;
 
 export function PosTouchScreen() {
   const priceIncludesTax = usePriceIncludesTax();
-  const { t } = useTranslation(['posTouch', 'common', 'fulfillmentErrors']);
-  const { currentSite } = useTenant();
+  const { t } = useTranslation(['posTouch', 'common', 'fulfillmentErrors', 'salesQuickAccess']);
+  const { currentSite, isLoadingSites } = useTenant();
   const toast = useToast();
   const utils = trpc.useUtils();
   const catalogRef = useRef<HTMLDivElement>(null);
@@ -101,6 +117,24 @@ export function PosTouchScreen() {
   const [isCheckoutLocked, setIsCheckoutLocked] = useState(false);
   const checkoutLockedRef = useRef(false);
   const ticketEpochRef = useRef(0);
+  const valueTicketEpochRef = useRef(0);
+  const { query: quickKeysQuery, tiles: quickTiles } = useSiteQuickKeys(siteId);
+
+  const setTieredCartItems = useCallback<Dispatch<SetStateAction<SaleCartItem[]>>>(update => {
+    setCartItems(current => {
+      if (checkoutLockedRef.current) return current;
+      const next = typeof update === 'function' ? update(current) : update;
+      return applyPriceTier(next, activePriceTierRef.current);
+    });
+  }, []);
+  const resolveQuickTile = useQuickTileSelection(siteId);
+  // The site's keys open first; a category tab or a search switches to the catalog.
+  const [showQuickKeys, setShowQuickKeys] = useState(true);
+  const [valueTile, setValueTile] = useState<QuickTile | null>(null);
+  // The raw text, not the debounced one, so the keys tab answers on the first tap.
+  const quickKeysView = showQuickKeys && quickTiles.length > 0 && !searchText.trim();
+  // Holding the grid until the keys arrive keeps a tap from landing on a swapping layout.
+  const quickKeysPending = showQuickKeys && quickKeysQuery.isLoading;
 
   const productsQuery = trpc.products.list.useQuery(
     {
@@ -111,7 +145,11 @@ export function PosTouchScreen() {
       siteId,
       search: search || undefined,
     },
-    { enabled: siteId.length > 0, staleTime: 30_000, placeholderData: keepPreviousData }
+    {
+      enabled: siteId.length > 0 && !quickKeysView && !quickKeysPending,
+      staleTime: 30_000,
+      placeholderData: keepPreviousData,
+    }
   );
   const categoryCountsQuery = trpc.products.categoryCounts.useQuery(undefined, {
     enabled: siteId.length > 0,
@@ -181,10 +219,12 @@ export function PosTouchScreen() {
     return quantities;
   }, [cartItems]);
 
-  const summary = useMemo(
-    () => getCartSummary(cartItems, priceIncludesTax),
-    [cartItems, priceIncludesTax]
-  );
+  const { currency } = useResolvedLocale();
+  // Shown and tendered as the payable total, the amount sales.create completes.
+  const summary = useMemo(() => {
+    const cart = getCartSummary(cartItems, priceIncludesTax);
+    return { ...cart, total: getPayableCartTotal(cart, currency).total };
+  }, [cartItems, currency, priceIncludesTax]);
 
   // The grid query is capped at perPage: 200 — surface the truncation
   // instead of silently hiding the tail of a bigger catalog.
@@ -235,21 +275,43 @@ export function PosTouchScreen() {
   });
   const isServerRestarting = useEmbeddedServerState() === 'restarting';
   const checkoutLocked = isCheckoutLocked || createMutation.isPending;
+  const {
+    open: openWeighing,
+    close: closeWeighing,
+    panel: weighPanel,
+    weighingProductId,
+  } = useWeighedItem({
+    cartItems,
+    setCartItems: setTieredCartItems,
+    locked: checkoutLocked,
+    priceTier: activePriceTier,
+    // Pinned under the tiles so it never pushes them away from the finger.
+    className: 'sticky bottom-0 z-10 mt-3 shadow-[0_-12px_24px_-18px_rgb(10_18_33/0.35)]',
+  });
 
-  // useCallback keeps every memoized tile from re-rendering on a cart tick;
-  // only the tile whose quantity changed renders again.
-  const handleAddToCart = useCallback(
-    async (product: Product) => {
+  const addSelection = useCallback(
+    (selection: ProductSearchSelection, name: string, quantity: number | null = null) => {
+      setCartItems(current =>
+        applyPriceTier(
+          quantity === null
+            ? mergeCartItem(current, selection)
+            : mergeBarcodeCartItem(current, selection, { quantity, price: null }),
+          activePriceTierRef.current
+        )
+      );
+      toast.success({ title: t('toast.addedToCart', { name }) });
+    },
+    [toast, t]
+  );
+
+  /** Hydrates a tapped product and adds it unless a charge or a new ticket started meanwhile. */
+  const addHydrated = useCallback(
+    async (load: () => Promise<ProductSearchSelection | null>, name: string) => {
       if (checkoutLockedRef.current) return;
       const ticketEpoch = ticketEpochRef.current;
-      // `products.list` (the grid query) skips unit assignments to
-      // keep the catalog payload small. Hydrate the full product via
-      // `products.getById` so we can pick the real base-unit id and
-      // build a valid `ProductSearchSelection` for `mergeCartItem`.
       try {
-        const full = await utils.products.getById.fetch({ id: product.id, siteId });
+        const selection = await load();
         if (checkoutLockedRef.current || ticketEpoch !== ticketEpochRef.current) return;
-        const selection = selectionFromHydratedProduct(full as unknown as Product);
         if (!selection) {
           toast.error({
             title: t('toast.chargeError'),
@@ -257,10 +319,12 @@ export function PosTouchScreen() {
           });
           return;
         }
-        setCartItems(current =>
-          applyPriceTier(mergeCartItem(current, selection), activePriceTierRef.current)
-        );
-        toast.success({ title: t('toast.addedToCart', { name: product.name }) });
+        if (openWeighing(selection)) {
+          setValueTile(null);
+        } else {
+          closeWeighing();
+          addSelection(selection, name);
+        }
       } catch (err) {
         if (checkoutLockedRef.current || ticketEpoch !== ticketEpochRef.current) return;
         toast.error({
@@ -269,16 +333,39 @@ export function PosTouchScreen() {
         });
       }
     },
-    [utils, toast, t, siteId]
+    [addSelection, closeWeighing, openWeighing, toast, t]
   );
 
-  const setTieredCartItems = useCallback<Dispatch<SetStateAction<SaleCartItem[]>>>(update => {
-    setCartItems(current => {
-      if (checkoutLockedRef.current) return current;
-      const next = typeof update === 'function' ? update(current) : update;
-      return applyPriceTier(next, activePriceTierRef.current);
-    });
-  }, []);
+  // useCallback keeps every memoized tile from re-rendering on a cart tick;
+  // only the tile whose quantity changed renders again.
+  const handleAddToCart = useCallback(
+    (product: Product) =>
+      // `products.list` skips unit assignments to keep the grid payload small.
+      addHydrated(async () => {
+        const full = await utils.products.getById.fetch({ id: product.id, siteId });
+        return selectionFromHydratedProduct(full as unknown as Product);
+      }, product.name),
+    [addHydrated, utils, siteId]
+  );
+
+  function handleQuickTile(tile: QuickTile) {
+    if (checkoutLockedRef.current) return;
+    if (tile.kind === 'open_value') {
+      valueTicketEpochRef.current = ticketEpochRef.current;
+      closeWeighing();
+      setValueTile(tile);
+    } else void addHydrated(() => resolveQuickTile(tile), tile.name);
+  }
+
+  function handleValueAdd(selection: ProductSearchSelection, quantity: number) {
+    if (checkoutLockedRef.current || !valueTile) return;
+    if (valueTicketEpochRef.current !== ticketEpochRef.current) {
+      setValueTile(null);
+      return;
+    }
+    addSelection(selection, valueTile.name, quantity);
+    setValueTile(null);
+  }
 
   const handlePriceTierChange = useCallback((tier: 1 | 2 | 3) => {
     if (checkoutLockedRef.current) return;
@@ -328,6 +415,7 @@ export function PosTouchScreen() {
   function handleClearCart() {
     if (checkoutLockedRef.current) return;
     setCartItems([]);
+    closeWeighing();
     // An abandoned ticket must not hand its buyer to the next customer.
     invoiceForm.reset();
   }
@@ -339,8 +427,16 @@ export function PosTouchScreen() {
 
   function handleCategoryChange(categoryId: string | null) {
     if (checkoutLockedRef.current) return;
+    setShowQuickKeys(false);
+    setValueTile(null);
     setActiveCategoryId(categoryId);
     setCatalogPage(1);
+  }
+
+  function handleShowQuickKeys() {
+    if (checkoutLockedRef.current) return;
+    setShowQuickKeys(true);
+    setSearchText('');
   }
 
   function handleSearchChange(value: string) {
@@ -372,6 +468,7 @@ export function PosTouchScreen() {
     if (!canCharge || checkoutLockedRef.current) return;
     checkoutLockedRef.current = true;
     ticketEpochRef.current += 1;
+    setValueTile(null);
     setIsCheckoutLocked(true);
     try {
       const electronicInvoice = buildElectronicInvoiceRequest(
@@ -404,6 +501,25 @@ export function PosTouchScreen() {
     }
   }
 
+  // Leaving mid-charge would orphan the in-flight sale.
+  const headerLinkProps = {
+    'aria-disabled': checkoutLocked,
+    tabIndex: checkoutLocked ? -1 : undefined,
+    onClick: (event: MouseEvent<HTMLAnchorElement>) => {
+      if (checkoutLockedRef.current) event.preventDefault();
+    },
+    className: `inline-flex min-h-[44px] items-center gap-2 rounded-full border border-line/70 bg-surface-1 px-4 py-2 text-xs font-medium text-secondary-700 hover:bg-surface-2 ${checkoutLocked ? 'pointer-events-none cursor-wait opacity-60' : ''}`,
+  };
+
+  if (!siteId && isLoadingSites) {
+    return (
+      <PageLoadingState
+        title={t('common:loading.pageTitle')}
+        description={t('common:loading.pageDescription')}
+      />
+    );
+  }
+
   if (!siteId) {
     return (
       <section
@@ -418,6 +534,9 @@ export function PosTouchScreen() {
         >
           {t('page.noActiveSite')}
         </p>
+        <Link to="/sales" data-testid="pos-touch-till-link" {...headerLinkProps}>
+          {t('page.tillLink')}
+        </Link>
       </section>
     );
   }
@@ -432,20 +551,16 @@ export function PosTouchScreen() {
           <h2 className="font-display text-3xl tracking-[-0.02em]">{t('page.title')}</h2>
           <p className="max-w-2xl text-sm text-secondary-600">{t('page.subtitle')}</p>
         </div>
-        {dineInActive && (
-          <Link
-            to="/touch/voice"
-            data-testid="pos-touch-voice-link"
-            aria-disabled={checkoutLocked}
-            tabIndex={checkoutLocked ? -1 : undefined}
-            onClick={event => {
-              if (checkoutLockedRef.current) event.preventDefault();
-            }}
-            className={`inline-flex min-h-[44px] items-center gap-2 self-start rounded-full border border-line/70 bg-surface-1 px-4 py-2 text-xs font-medium text-secondary-700 hover:bg-surface-2 ${checkoutLocked ? 'pointer-events-none cursor-wait opacity-60' : ''}`}
-          >
-            {t('page.voiceLink')}
+        <div className="flex flex-wrap gap-2 self-start">
+          {dineInActive && (
+            <Link to="/touch/voice" data-testid="pos-touch-voice-link" {...headerLinkProps}>
+              {t('page.voiceLink')}
+            </Link>
+          )}
+          <Link to="/sales" data-testid="pos-touch-till-link" {...headerLinkProps}>
+            {t('page.tillLink')}
           </Link>
-        )}
+        </div>
       </header>
 
       <PosTouchCategoryTabs
@@ -454,6 +569,11 @@ export function PosTouchScreen() {
         onSelectCategory={handleCategoryChange}
         totalCount={categoryCountsQuery.data?.total ?? 0}
         isDisabled={checkoutLocked}
+        quickKeys={{
+          count: quickTiles.length,
+          active: quickKeysView,
+          onSelect: handleShowQuickKeys,
+        }}
       />
 
       <div
@@ -484,16 +604,38 @@ export function PosTouchScreen() {
               />
             </span>
           </label>
-          <PosTouchProductGrid
-            products={products}
-            isLoading={productsQuery.isLoading}
-            isError={Boolean(productsQuery.error)}
-            isDisabled={checkoutLocked}
-            onSelect={handleAddToCart}
-            cartQuantities={cartQuantities}
-            emptyMessage={search ? t('grid.noMatches') : undefined}
-          />
-          {catalogPages > 1 && (
+          {quickKeysView && valueTile && (
+            <QuickKeyValueForm
+              key={valueTile.key}
+              className="mb-2"
+              tile={valueTile}
+              resolveSelection={resolveQuickTile}
+              onAdd={handleValueAdd}
+              onCancel={() => setValueTile(null)}
+            />
+          )}
+          {quickKeysView ? (
+            <PosTouchQuickKeyGrid
+              tiles={quickTiles}
+              isDisabled={checkoutLocked}
+              activeValueKey={valueTile?.key ?? null}
+              weighingProductId={weighingProductId}
+              cartQuantities={cartQuantities}
+              onSelect={handleQuickTile}
+            />
+          ) : (
+            <PosTouchProductGrid
+              products={products}
+              isLoading={productsQuery.isLoading || quickKeysPending}
+              isError={Boolean(productsQuery.error)}
+              isDisabled={checkoutLocked}
+              onSelect={handleAddToCart}
+              weighingProductId={weighingProductId}
+              cartQuantities={cartQuantities}
+              emptyMessage={search ? t('grid.noMatches') : undefined}
+            />
+          )}
+          {!quickKeysView && catalogPages > 1 && (
             <nav
               aria-label={t('grid.paginationLabel')}
               data-testid="pos-touch-pagination"
@@ -530,6 +672,7 @@ export function PosTouchScreen() {
               </button>
             </nav>
           )}
+          {weighPanel}
         </div>
         <PosTouchCartSidebar
           items={cartItems}
@@ -548,6 +691,7 @@ export function PosTouchScreen() {
                     form={invoiceForm}
                     identificationTypes={invoiceAvailability.identificationTypes}
                     selectedCustomer={invoiceCustomer}
+                    savedCustomers={customersQuery.data?.items}
                     touch
                   />
                 </fieldset>

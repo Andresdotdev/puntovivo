@@ -17,6 +17,7 @@ describe('useProductForm submit contract', () => {
       result.current.form.setValue('unitAssignments', [
         {
           unitId: 'unit-independent',
+          barcode: '',
           equivalence: 1,
           price: 75,
           price2: 65,
@@ -30,6 +31,75 @@ describe('useProductForm submit contract', () => {
 
     expect(result.current.form.getValues('price')).toBe(120);
     expect(result.current.form.getValues('unitAssignments.0.price')).toBe(75);
+  });
+
+  it('keeps a typed price when the cost is typed afterwards and leaves empty tiers at 0', async () => {
+    const { result } = renderHook(() =>
+      useProductForm({ mode: 'create', product: null, onSubmit: vi.fn() })
+    );
+
+    await act(async () => {
+      result.current.syncTier('price', 'marginPercent1', 'marginAmount1', { price: 5000 });
+      result.current.syncAllTiersFromCost(3000);
+      await Promise.resolve();
+    });
+
+    const values = result.current.form.getValues();
+    expect(values.price).toBe(5000);
+    expect(values.marginAmount1).toBe(2000);
+    expect(values.marginPercent1).toBeCloseTo(66.67);
+    expect([values.price2, values.price3]).toEqual([0, 0]);
+    expect([values.marginPercent2, values.marginAmount2]).toEqual([0, 0]);
+    expect(values.initialCost).toBe(3000);
+  });
+
+  it('reprices from cost only for a tier whose margin the operator typed', async () => {
+    const { result } = renderHook(() =>
+      useProductForm({ mode: 'create', product: null, onSubmit: vi.fn() })
+    );
+
+    await act(async () => {
+      result.current.syncAllTiersFromCost(1000);
+      result.current.syncTier('price', 'marginPercent1', 'marginAmount1', { marginPercent: 50 });
+      result.current.syncTier('price2', 'marginPercent2', 'marginAmount2', { price: 1400 });
+      result.current.syncAllTiersFromCost(2000);
+      await Promise.resolve();
+    });
+
+    const values = result.current.form.getValues();
+    expect(values.price).toBe(3000);
+    expect(values.marginPercent1).toBe(50);
+    expect(values.price2).toBe(1400);
+    expect(values.marginPercent2).toBe(0);
+  });
+
+  it('mirrors cost into initial cost after the cost input has already stored the value', async () => {
+    const { result } = renderHook(() =>
+      useProductForm({ mode: 'create', product: null, onSubmit: vi.fn() })
+    );
+
+    await act(async () => {
+      result.current.form.setValue('cost', 3000);
+      result.current.syncAllTiersFromCost(3000);
+      await Promise.resolve();
+    });
+
+    expect(result.current.form.getValues('initialCost')).toBe(3000);
+  });
+
+  it('stops mirroring cost into initial cost once initial cost is typed apart', async () => {
+    const { result } = renderHook(() =>
+      useProductForm({ mode: 'create', product: null, onSubmit: vi.fn() })
+    );
+
+    await act(async () => {
+      result.current.syncAllTiersFromCost(1000);
+      result.current.form.setValue('initialCost', 900);
+      result.current.syncAllTiersFromCost(1200);
+      await Promise.resolve();
+    });
+
+    expect(result.current.form.getValues('initialCost')).toBe(900);
   });
 
   it('propagates unexpected submit failures to observability', async () => {
