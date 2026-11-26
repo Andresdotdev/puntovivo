@@ -1,9 +1,12 @@
-import { screen, within } from '@testing-library/react';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18next from 'i18next';
 import { render } from '@/test/utils';
 import type { Purchase } from '@/types';
 import { PurchaseDetailsContent } from './PurchaseDetailsContent';
+
+const { attachMutate } = vi.hoisted(() => ({ attachMutate: vi.fn() }));
 
 vi.mock('@/lib/trpc', () => ({
   trpc: {
@@ -16,7 +19,7 @@ vi.mock('@/lib/trpc', () => ({
     }),
     purchases: {
       attachDocument: {
-        useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+        useMutation: () => ({ mutate: attachMutate, mutateAsync: vi.fn(), isPending: false }),
       },
     },
   },
@@ -211,5 +214,47 @@ describe('PurchaseDetailsContent lot evidence', () => {
     expect(screen.getByText('Remisión REM-0002')).toBeInTheDocument();
     expect(screen.getByText('Facturada')).toBeInTheDocument();
     expect(screen.queryByText('Pendiente de facturar')).not.toBeInTheDocument();
+  });
+});
+
+describe('PurchaseDetailsContent attachment from the detail view', () => {
+  beforeAll(async () => i18next.changeLanguage('es'));
+
+  beforeEach(() => {
+    attachMutate.mockReset();
+  });
+
+  function paperInput() {
+    return document.querySelector('input[type="file"]') as HTMLInputElement;
+  }
+
+  it('still uploads the paper chosen after the purchase was registered', async () => {
+    const user = userEvent.setup();
+    render(<PurchaseDetailsContent purchase={purchase} returnError={null} voidError={null} />);
+
+    await user.upload(
+      paperInput(),
+      new File([new Uint8Array([1, 2, 3, 4])], 'remision.png', { type: 'image/png' })
+    );
+
+    await waitFor(() =>
+      expect(attachMutate).toHaveBeenCalledWith({
+        purchaseId: 'purchase-1',
+        fileName: 'remision.png',
+        mimeType: 'image/png',
+        documentBase64: 'AQIDBA==',
+      })
+    );
+  });
+
+  it('refuses a file that is not a photo or a PDF', async () => {
+    render(<PurchaseDetailsContent purchase={purchase} returnError={null} voidError={null} />);
+
+    fireEvent.change(paperInput(), {
+      target: { files: [new File([new Uint8Array([1])], 'notas.txt', { type: 'text/plain' })] },
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo adjuntar el documento');
+    expect(attachMutate).not.toHaveBeenCalled();
   });
 });

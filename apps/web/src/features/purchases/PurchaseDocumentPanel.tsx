@@ -6,15 +6,16 @@ import { useToast } from '@/components/feedback/ToastProvider';
 import { invalidateGroups } from '@/lib/invalidateGroups';
 import { formatDateTime } from '@/lib/utils';
 import { formatLotExpiryDate } from '@/features/inventory/lotForm';
+import {
+  PURCHASE_DOCUMENT_MIME_TYPES,
+  isAcceptedPurchaseDocument,
+  readPurchaseDocumentBase64,
+} from '@/features/purchases/purchaseDocumentFile';
 import type { Purchase } from '@/types';
 
 interface PurchaseDocumentPanelProps {
   purchase: Purchase;
 }
-
-const ACCEPTED_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'] as const;
-const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
-const dataUrlPrefix = /^data:[^;]+;base64,/;
 
 /** Label key per recorded paper. A documento soporte is its own Colombian
  * document, not a free-text `other`. */
@@ -87,25 +88,16 @@ export function PurchaseDocumentPanel({ purchase }: PurchaseDocumentPanelProps) 
   const remisionLabel = remision ? t('remision.title', { number: remision.number }) : null;
 
   const handleFileSelected = async (file: File) => {
-    if (!ACCEPTED_MIME.includes(file.type as (typeof ACCEPTED_MIME)[number])) {
+    if (!isAcceptedPurchaseDocument(file)) {
       setError(t('document.attachError'));
       return;
     }
-    if (file.size > MAX_DOCUMENT_BYTES) {
-      setError(t('document.attachError'));
-      return;
-    }
-    const documentBase64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result).replace(dataUrlPrefix, ''));
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
+    const documentBase64 = await readPurchaseDocumentBase64(file);
     setBusy(true);
     attachMutation.mutate({
       purchaseId: purchase.id,
       fileName: file.name,
-      mimeType: file.type as (typeof ACCEPTED_MIME)[number],
+      mimeType: file.type,
       documentBase64,
     });
   };
@@ -174,7 +166,7 @@ export function PurchaseDocumentPanel({ purchase }: PurchaseDocumentPanelProps) 
             ref={fileInputRef}
             type="file"
             className="hidden"
-            accept={ACCEPTED_MIME.join(',')}
+            accept={PURCHASE_DOCUMENT_MIME_TYPES.join(',')}
             onChange={event => {
               const file = event.target.files?.[0];
               event.target.value = '';

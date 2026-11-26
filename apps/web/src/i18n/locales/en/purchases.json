@@ -205,7 +205,15 @@
     "attachConflict": "This purchase already has an attached document. The view was refreshed to show it.",
     "previewTitle": "Document preview",
     "close": "Close",
-    "download": "Download"
+    "download": "Download",
+    "attachmentField": "Photo or PDF of the document",
+    "attachmentHelp": "Uploaded automatically once the purchase is registered.",
+    "attachmentSelected": "Selected file: {{name}}",
+    "attachmentRemove": "Remove file",
+    "invalidFile": "Use a JPG, PNG or WebP photo, or a PDF, up to 10 MB.",
+    "registeredWithoutDocument": "The purchase was recorded, but its document could not be attached ({{name}}). You can retry the attachment without registering the purchase again.",
+    "retryAttach": "Retry attachment",
+    "retryingAttach": "Attaching..."
   },
   "remision": {
     "title": "Delivery note {{number}}",

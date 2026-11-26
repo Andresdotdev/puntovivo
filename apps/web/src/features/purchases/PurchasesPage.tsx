@@ -14,6 +14,11 @@ import {
   PurchaseFinalizeModal,
   type PurchaseFinalizeValues,
 } from '@/features/purchases/PurchaseFinalizeModal';
+import {
+  attachPurchaseDocumentFile,
+  registerPurchaseWithDocument,
+  type AttachPurchaseDocument,
+} from '@/features/purchases/purchaseRegistration';
 import { PurchasesHistoryTable } from '@/features/purchases/PurchasesHistoryTable';
 import { purchaseErrorKey } from '@/features/purchases/purchaseErrorMessage';
 import {
@@ -33,6 +38,7 @@ import { translateServerError } from '@/lib/translateServerError';
 import { useCriticalMutation } from '@/lib/useCriticalMutation';
 import { formatCurrency } from '@/lib/utils';
 import { isTaskActivationKey, useTaskMeasurementController } from '@/lib/taskMeasurement';
+import { useSingleFlightSubmit } from '@/lib/useSingleFlightSubmit';
 import type { Category, Provider, Purchase } from '@/types';
 import { parseSerialNumbers } from '@/features/inventory/serialNumbers';
 
@@ -58,6 +64,12 @@ export function PurchasesPage() {
     null
   );
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  // A purchase that is already committed and only lacks its paper: the retry
+  // re-uploads against this receipt instead of booking its stock again.
+  const [pendingDocument, setPendingDocument] = useState<{
+    purchaseId: string;
+    file: File;
+  } | null>(null);
 
   useEffect(() => {
     stockReceiptMeasurement.ensure('receive_stock');
@@ -82,9 +94,7 @@ export function PurchasesPage() {
         u => u.inventoryLots.list,
         u => u.inventoryLots.expiring,
       ]);
-      setCartItems([]);
       setPurchaseError(null);
-      setIsFinalizeModalOpen(false);
       stockReceiptMeasurement.finish('success');
       toast.success({
         title: t('toast.success'),
@@ -93,6 +103,8 @@ export function PurchasesPage() {
     },
     onError: onErrorToast(toast, t),
   });
+
+  const attachDocumentMutation = trpc.purchases.attachDocument.useMutation();
 
   const draftSummary = getPurchaseCartSummary(cartItems);
   const serialsComplete = hasCompletePurchaseSerials(cartItems);
@@ -176,26 +188,97 @@ export function PurchasesPage() {
     }
 
     setPurchaseError(null);
+    setPendingDocument(null);
     setFinalizeModalKey(current => current + 1);
     setIsFinalizeModalOpen(true);
   };
 
+  const handleCloseFinalizeModal = () => {
+    // Closing after a registered purchase must not leave its items in the
+    // draft cart as if nothing had been received.
+    if (pendingDocument) {
+      setCartItems([]);
+    }
+    setPendingDocument(null);
+    setPurchaseError(null);
+    setIsFinalizeModalOpen(false);
+  };
+
+  const attachDocument: AttachPurchaseDocument = payload =>
+    attachDocumentMutation.mutateAsync(payload);
+
+  const refreshAttachedDocument = async () => {
+    await invalidateGroups(utils, [u => u.purchases.list, u => u.purchases.getById]);
+  };
+
+  const handleRetryDocument = useSingleFlightSubmit(
+    !attachDocumentMutation.isPending,
+    async () => {
+      if (!pendingDocument) {
+        return;
+      }
+      setPurchaseError(null);
+      const result = await attachPurchaseDocumentFile(
+        attachDocument,
+        pendingDocument.purchaseId,
+        pendingDocument.file
+      );
+      if (result.status !== 'attached') {
+        setPurchaseError(t('document.attachError'));
+        return;
+      }
+      await refreshAttachedDocument();
+      setPendingDocument(null);
+      setPurchaseError(null);
+      setIsFinalizeModalOpen(false);
+      toast.success({ title: t('document.attachSuccess') });
+    }
+  );
+
   const handleFinalize = async (values: PurchaseFinalizeValues) => {
+    setPurchaseError(null);
     try {
-      await createMutation.mutateAsync({
-        providerId: values.providerId,
-        items: cartItems.map(item => ({
-          productId: item.productId,
-          unitId: item.unitId,
-          quantity: item.quantity,
-          costPerUnit: item.costPerUnit,
-          ...(item.tracksSerials ? { serialNumbers: parseSerialNumbers(item.serialNumbers) } : {}),
-          ...(item.tracksLots ? { lotReceipts: values.lotReceiptsByItemKey[item.key] } : {}),
-        })),
-        notes: values.notes || undefined,
-        documentType: values.documentType === '' ? undefined : values.documentType,
-        documentNumber: values.documentNumber.trim() || undefined,
-      });
+      const result = await registerPurchaseWithDocument(
+        {
+          createPurchase: () =>
+            createMutation.mutateAsync({
+              providerId: values.providerId,
+              items: cartItems.map(item => ({
+                productId: item.productId,
+                unitId: item.unitId,
+                quantity: item.quantity,
+                costPerUnit: item.costPerUnit,
+                ...(item.tracksSerials
+                  ? { serialNumbers: parseSerialNumbers(item.serialNumbers) }
+                  : {}),
+                ...(item.tracksLots
+                  ? { lotReceipts: values.lotReceiptsByItemKey[item.key] }
+                  : {}),
+              })),
+              notes: values.notes || undefined,
+              documentType: values.documentType === '' ? undefined : values.documentType,
+              documentNumber: values.documentNumber.trim() || undefined,
+            }),
+          attachDocument,
+        },
+        { file: values.documentFile }
+      );
+
+      // The receipt is committed: the draft cart is no longer the work in
+      // progress, whether or not its paper made it to the server.
+      setCartItems([]);
+
+      if (result.document.status === 'failed' && values.documentFile) {
+        // Only the upload failed: keep the committed purchase and offer the
+        // attachment again instead of booking a second entry of stock.
+        await refreshAttachedDocument();
+        setPendingDocument({ purchaseId: result.purchase.id, file: values.documentFile });
+        setPurchaseError(t('document.attachError'));
+        return;
+      }
+
+      setPendingDocument(null);
+      setIsFinalizeModalOpen(false);
     } catch (error) {
       stockReceiptMeasurement.recordValidationError();
       setPurchaseError(t(purchaseErrorKey(error)));
@@ -365,9 +448,13 @@ export function PurchasesPage() {
         total={draftSummary.total}
         providers={providers}
         items={cartItems}
-        isSaving={createMutation.isPending}
+        isSaving={createMutation.isPending || attachDocumentMutation.isPending}
         error={purchaseError}
-        onClose={() => setIsFinalizeModalOpen(false)}
+        pendingDocument={
+          pendingDocument ? { fileName: pendingDocument.file.name } : null
+        }
+        onClose={handleCloseFinalizeModal}
+        onRetryDocument={handleRetryDocument}
         onSubmit={handleFinalize}
         onInvalid={() => stockReceiptMeasurement.recordValidationError()}
       />

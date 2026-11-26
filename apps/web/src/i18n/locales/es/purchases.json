@@ -205,7 +205,15 @@
     "attachConflict": "Esta compra ya tiene un documento adjunto. La vista se actualizó para mostrarlo.",
     "previewTitle": "Vista previa del documento",
     "close": "Cerrar",
-    "download": "Descargar"
+    "download": "Descargar",
+    "attachmentField": "Foto o PDF del documento",
+    "attachmentHelp": "Se sube automáticamente cuando la compra quede registrada.",
+    "attachmentSelected": "Archivo: {{name}}",
+    "attachmentRemove": "Quitar archivo",
+    "invalidFile": "Use una foto JPG, PNG o WebP, o un PDF, de máximo 10 MB.",
+    "registeredWithoutDocument": "La compra quedó registrada, pero el documento no se pudo adjuntar ({{name}}). Puede reintentar el adjunto sin registrar la compra otra vez.",
+    "retryAttach": "Reintentar adjunto",
+    "retryingAttach": "Adjuntando..."
   },
   "remision": {
     "title": "Remisión {{number}}",
