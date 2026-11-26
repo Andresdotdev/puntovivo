@@ -25,6 +25,10 @@
     "PROVIDER_PAYABLE_ALLOCATION_TOTAL_MISMATCH": "Allocate the full payment or credit.",
     "PROVIDER_PAYABLE_ALLOCATION_DUPLICATE": "Allocate each invoice once.",
     "PROVIDER_PAYABLE_INVOICE_NOT_FOUND": "Supplier invoice not found.",
-    "PROVIDER_PAYABLE_ALLOCATION_EXCEEDS_OUTSTANDING": "An allocation exceeds the invoice balance."
+    "PROVIDER_PAYABLE_ALLOCATION_EXCEEDS_OUTSTANDING": "An allocation exceeds the invoice balance.",
+    "PROVIDER_PAYABLE_PURCHASE_DUPLICATED": "That purchase is already covered by another supplier invoice. Remove the duplicate and try again.",
+    "PROVIDER_PAYABLE_PURCHASE_SITE_MISMATCH": "The invoice and the purchases it covers belong to different sites. Use a single site per invoice.",
+    "PROVIDER_PAYABLE_INVOICE_LINES_MISMATCH": "The invoice lines do not match what actually arrived in the purchases it covers.",
+    "PROVIDER_PAYABLE_INVOICE_AMOUNT_MISMATCH": "The invoice total does not match the value received in the purchases it covers."
   }
 }
