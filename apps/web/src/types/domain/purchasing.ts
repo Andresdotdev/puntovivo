@@ -63,6 +63,33 @@ export interface PurchaseRemision {
   notes?: string | null;
 }
 
+/**
+ * A delivery note waiting for the supplier invoice that covers it.
+ *
+ * The grouping screen reads the paper, the delivery it documents and what it
+ * is still worth after any return, because that value is what the invoice must
+ * reconcile against.
+ */
+export interface PendingPurchaseRemision {
+  id: string;
+  number: string;
+  /** Issue date printed on the paper (`YYYY-MM-DD`). */
+  issuedAt: string;
+  invoicingStatus: 'pending' | 'invoiced';
+  payableInvoiceId?: string | null;
+  providerId: string;
+  siteId: string;
+  siteName?: string | null;
+  purchaseId: string;
+  purchaseNumber: string;
+  purchaseStatus: PurchaseStatus;
+  purchaseOrderId?: string | null;
+  receivedAt: string;
+  notes?: string | null;
+  /** Value still held: received minus returned. */
+  netTotal: number;
+}
+
 export interface PurchaseItem {
   id: string;
   purchaseId: string;

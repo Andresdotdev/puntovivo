@@ -3,6 +3,7 @@ import {
   createProviderOpeningBalance,
   getProviderPayableOverview,
   listAvailableProviderPurchases,
+  listPendingProviderRemisions,
   recordProviderCredit,
   recordProviderPayment,
   type CriticalProviderPayableContext,
@@ -16,6 +17,7 @@ import {
   availableProviderPurchasesInput,
   createProviderInvoiceInput,
   createProviderOpeningBalanceInput,
+  pendingProviderRemisionsInput,
   providerPayableOverviewInput,
   recordProviderCreditInput,
   recordProviderPaymentInput,
@@ -45,6 +47,14 @@ export const providerPayablesRouter = router({
     .query(async ({ ctx, input }) => {
       if (input.siteId) await ensureTenantSite(ctx.db, ctx.tenantId, input.siteId);
       return listAvailableProviderPurchases(ctx.db, ctx.tenantId, input);
+    }),
+
+  /** Delivery notes waiting for the supplier invoice that will cover them. */
+  pendingRemisions: managerOrAdminProcedure
+    .input(pendingProviderRemisionsInput)
+    .query(async ({ ctx, input }) => {
+      if (input.siteId) await ensureTenantSite(ctx.db, ctx.tenantId, input.siteId);
+      return listPendingProviderRemisions(ctx.db, ctx.tenantId, input);
     }),
 
   createInvoice: criticalCommandManagerOrAdminProcedure

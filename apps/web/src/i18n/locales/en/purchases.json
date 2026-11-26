@@ -210,5 +210,37 @@
       "pending": "Pending invoice",
       "invoiced": "Invoiced"
     }
+  },
+  "pendingRemisions": {
+    "title": "Delivery notes pending invoice",
+    "description": "Choose the provider and the delivery notes the invoice that just arrived covers. Every selected delivery note becomes invoiced and points at that invoice.",
+    "provider": "Provider",
+    "selectProvider": "Select a provider",
+    "pickProvider": "Select a provider to see its pending delivery notes.",
+    "loading": "Loading pending delivery notes...",
+    "empty": "This provider has no delivery notes pending invoice.",
+    "retry": "Retry",
+    "columns": {
+      "select": "Include",
+      "number": "Delivery note",
+      "issuedAt": "Date",
+      "purchase": "Receipt",
+      "site": "Site",
+      "netTotal": "Net value"
+    },
+    "selectRemision": "Include delivery note {{number}} in the invoice",
+    "selectionSummary": "{{count}} delivery note(s) for {{total}}",
+    "documentNumber": "Invoice number",
+    "issuedAt": "Invoice date",
+    "dueAt": "Due date",
+    "amount": "Invoice total",
+    "dateInvalid": "The due date cannot be before the invoice date.",
+    "submit": "Group into one invoice",
+    "submitting": "Grouping...",
+    "toast": {
+      "success": "Invoice recorded",
+      "successDetail": "The selected delivery notes are now invoiced.",
+      "error": "Could not group the delivery notes"
+    }
   }
 }
