@@ -2,7 +2,7 @@
   "version": "6",
   "dialect": "sqlite",
   "id": "96c27001-9a91-40af-aa7d-0e2544c15f29",
-  "prevId": "c0f572e6-3fe4-4caf-864a-127ba0ee7463",
+  "prevId": "8b86e9c9-f55b-4d96-9253-fd0c421217b8",
   "tables": {
     "account_recovery_codes": {
       "name": "account_recovery_codes",
