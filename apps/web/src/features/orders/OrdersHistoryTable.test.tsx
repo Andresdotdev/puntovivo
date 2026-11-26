@@ -134,4 +134,50 @@ describe('OrdersHistoryTable', () => {
     expect(screen.getByText('Draft')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Receive' })).not.toBeInTheDocument();
   });
+
+  it('prints only orders the supplier can still act on', async () => {
+    const user = userEvent.setup();
+    const onPrintOrder = vi.fn();
+
+    render(
+      <OrdersHistoryTable
+        orders={[
+          createOrder(),
+          createOrder({ id: 'order-2', orderNumber: 'PED-000002', status: 'received' }),
+          createOrder({ id: 'order-3', orderNumber: 'PED-000003', status: 'draft' }),
+        ]}
+        isLoading={false}
+        error={null}
+        onRetry={vi.fn()}
+        canManageReceipts={false}
+        onView={vi.fn()}
+        onReceive={vi.fn()}
+        onPrintOrder={onPrintOrder}
+      />
+    );
+
+    // received / draft rows stay unprintable, exactly like the detail modal.
+    expect(screen.getAllByRole('button', { name: /^Print PED-/ })).toHaveLength(1);
+
+    await user.click(screen.getByRole('button', { name: 'Print PED-000001' }));
+    expect(onPrintOrder).toHaveBeenCalledWith('order-1');
+  });
+
+  it('disables the print action while that order is printing', () => {
+    render(
+      <OrdersHistoryTable
+        orders={[createOrder()]}
+        isLoading={false}
+        error={null}
+        onRetry={vi.fn()}
+        canManageReceipts={false}
+        onView={vi.fn()}
+        onReceive={vi.fn()}
+        onPrintOrder={vi.fn()}
+        printingOrderId="order-1"
+      />
+    );
+
+    expect(screen.getByRole('button', { name: 'Print PED-000001' })).toBeDisabled();
+  });
 });

@@ -48,7 +48,8 @@ interface OrderHtmlOptions {
   autoPrint: boolean;
 }
 
-type OrderPrintErrorCode = 'notPrintable' | 'popupBlocked' | 'desktopBridgeFailed' | 'unknown';
+type OrderPrintErrorCode =
+  'notPrintable' | 'missingData' | 'notFound' | 'popupBlocked' | 'desktopBridgeFailed' | 'unknown';
 
 export class OrderPrintError extends Error {
   code: OrderPrintErrorCode;
@@ -69,6 +70,45 @@ const PRINTABLE_ORDER_STATUSES: readonly OrderStatusForPrint[] = ['submitted', '
 
 export function canPrintOrder(order: Pick<Order, 'status'> | null | undefined): boolean {
   return !!order && PRINTABLE_ORDER_STATUSES.includes(order.status);
+}
+
+/** What the printed sheet needs; each gap would leave a blank cell or row. */
+type OrderPrintDataGap = 'orderNumber' | 'provider' | 'date' | 'lines' | 'total' | 'line';
+
+function hasText(value: string | null | undefined): boolean {
+  return !!value?.trim();
+}
+
+/**
+ * Data the supplier reads off the sheet, checked before anything is printed.
+ *
+ * A missing supplier, number, date or total would print an unidentifiable
+ * document, and no lines at all would print an empty one — the operator gets a
+ * message instead of a sheet they cannot hand over.
+ */
+function findPrintDataGaps(order: PrintableOrder): OrderPrintDataGap[] {
+  const gaps: OrderPrintDataGap[] = [];
+
+  if (!hasText(order.orderNumber)) gaps.push('orderNumber');
+  if (!hasText(order.providerName)) gaps.push('provider');
+  if (!Number.isFinite(Date.parse(order.createdAt))) gaps.push('date');
+  if (!Number.isFinite(order.total)) gaps.push('total');
+
+  const items = order.items ?? [];
+  if (items.length === 0) {
+    gaps.push('lines');
+  } else if (
+    items.some(
+      item =>
+        !hasText(item.productName ?? item.productSku ?? item.productId) ||
+        !Number.isFinite(item.quantity) ||
+        !hasText(item.unitName ?? item.unitAbbreviation)
+    )
+  ) {
+    gaps.push('line');
+  }
+
+  return gaps;
 }
 
 function buildOrderRows(order: PrintableOrder, showReceiptProgress: boolean): string {
@@ -235,6 +275,16 @@ export async function printOrderDocument(order: PrintableOrder): Promise<void> {
     throw new OrderPrintError(
       'notPrintable',
       'Only a submitted or partially received order can be printed'
+    );
+  }
+
+  // Refuse before opening a window: an empty sheet leaves the operator holding
+  // something no supplier can act on.
+  const gaps = findPrintDataGaps(order);
+  if (gaps.length > 0) {
+    throw new OrderPrintError(
+      'missingData',
+      `The purchase order is missing data needed to print it: ${gaps.join(', ')}`
     );
   }
 

@@ -68,6 +68,8 @@
     "loading": "Cargando órdenes de compra...",
     "loadError": "No se pudo cargar las órdenes de compra",
     "receive": "Recibir",
+    "printOrder": "Imprimir {{number}}",
+    "printOrderTitle": "Imprimir la orden para el proveedor",
     "viewOrder": "Ver {{number}}",
     "viewOrderTitle": "Ver orden"
   },
@@ -127,6 +129,8 @@
     "printError": "No se pudo imprimir la orden",
     "printErrors": {
       "notPrintable": "Solo se puede imprimir una orden enviada o parcialmente recibida.",
+      "missingData": "La orden no tiene proveedor, fecha, líneas o total: no hay nada que imprimir.",
+      "notFound": "La orden ya no existe. Actualice la lista e intente de nuevo.",
       "popupBlocked": "Permita las ventanas emergentes para Puntovivo e intente de nuevo.",
       "desktopBridgeFailed": "La impresora del escritorio no pudo procesar la orden.",
       "unknown": "La orden no se pudo imprimir en este momento."

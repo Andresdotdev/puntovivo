@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DataTableColumnDef } from '@/components/tables/DataTable';
-import { Eye } from 'lucide-react';
+import { Eye, Printer } from 'lucide-react';
 import { DataTable } from '@/components/tables/DataTable';
 import { TableErrorState } from '@/components/tables/TableErrorState';
 import { TableLoadingState } from '@/components/tables/TableLoadingState';
 import { Badge, type BadgeVariant } from '@/components/ui';
+import { canPrintOrder } from '@/features/orders/orderPrinter';
 import { formatCurrency } from '@/lib/utils';
 import type { Order } from '@/types';
 
@@ -25,6 +26,10 @@ interface OrdersHistoryTableProps {
   canManageReceipts: boolean;
   onView: (orderId: string) => void;
   onReceive: (orderId: string) => void;
+  /** Prints the order for the supplier; the caller reads the saved record. */
+  onPrintOrder?: (orderId: string) => void;
+  /** Order currently being printed, so its action cannot be fired twice. */
+  printingOrderId?: string | null;
 }
 
 export function OrdersHistoryTable({
@@ -35,6 +40,8 @@ export function OrdersHistoryTable({
   canManageReceipts,
   onView,
   onReceive,
+  onPrintOrder,
+  printingOrderId = null,
 }: OrdersHistoryTableProps) {
   const { t } = useTranslation('orders');
 
@@ -79,7 +86,7 @@ export function OrdersHistoryTable({
       {
         id: 'actions',
         header: t('table.actions'),
-        size: 160,
+        size: 200,
         cell: ({ row }) => {
           const canReceiveOrder =
             canManageReceipts &&
@@ -87,6 +94,17 @@ export function OrdersHistoryTable({
 
           return (
             <div className="flex items-center justify-end gap-2">
+              {onPrintOrder && canPrintOrder(row.original) && (
+                <button
+                  className="btn-ghost btn-icon h-8 w-8"
+                  onClick={() => onPrintOrder(row.original.id)}
+                  disabled={printingOrderId === row.original.id}
+                  aria-label={t('table.printOrder', { number: row.original.orderNumber })}
+                  title={t('table.printOrderTitle')}
+                >
+                  <Printer className="h-4 w-4" />
+                </button>
+              )}
               {canReceiveOrder && (
                 <button
                   className="btn-outline h-8 px-3 text-xs"
@@ -108,7 +126,7 @@ export function OrdersHistoryTable({
         },
       },
     ],
-    [canManageReceipts, onReceive, onView, t]
+    [canManageReceipts, onPrintOrder, onReceive, onView, printingOrderId, t]
   );
 
   return (

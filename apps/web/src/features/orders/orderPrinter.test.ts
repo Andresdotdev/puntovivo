@@ -21,9 +21,7 @@ function parseDocument(html: string): Document {
  * document would pass even with the quantity cells wrong or missing.
  */
 function readCells(parsed: Document, selector: string): string[] {
-  return Array.from(parsed.querySelectorAll(selector), cell =>
-    (cell.textContent ?? '').trim()
-  );
+  return Array.from(parsed.querySelectorAll(selector), cell => (cell.textContent ?? '').trim());
 }
 
 function makeOrder(overrides: Partial<Order> = {}): Order {
@@ -199,6 +197,61 @@ describe('orderPrinter', () => {
     } satisfies Partial<OrderPrintError>);
   });
 
+  it('refuses to print an order with no lines instead of sending a blank sheet', async () => {
+    const open = vi.spyOn(window, 'open');
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL');
+
+    await expect(printOrderDocument(makeOrder({ items: [] }))).rejects.toMatchObject({
+      name: 'OrderPrintError',
+      code: 'missingData',
+    } satisfies Partial<OrderPrintError>);
+
+    // Nothing reaches the browser: no empty document, no printable blob.
+    expect(open).not.toHaveBeenCalled();
+    expect(createObjectURL).not.toHaveBeenCalled();
+  });
+
+  it('refuses to print when the supplier or the order number is missing', async () => {
+    const open = vi.spyOn(window, 'open');
+
+    await expect(printOrderDocument(makeOrder({ providerName: null }))).rejects.toMatchObject({
+      name: 'OrderPrintError',
+      code: 'missingData',
+    } satisfies Partial<OrderPrintError>);
+
+    await expect(printOrderDocument(makeOrder({ orderNumber: '   ' }))).rejects.toMatchObject({
+      name: 'OrderPrintError',
+      code: 'missingData',
+    } satisfies Partial<OrderPrintError>);
+
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('refuses to print a line without a unit, because the supplier cannot pick it', async () => {
+    const baseItem = makeOrder().items?.[0];
+    if (!baseItem) throw new Error('Expected a fixture order item');
+
+    await expect(
+      printOrderDocument(
+        makeOrder({ items: [{ ...baseItem, unitName: null, unitAbbreviation: null }] })
+      )
+    ).rejects.toMatchObject({
+      name: 'OrderPrintError',
+      code: 'missingData',
+    } satisfies Partial<OrderPrintError>);
+  });
+
+  it('checks the order status before the print data', async () => {
+    // A draft is still a draft: the operator must submit it first, not learn
+    // that some field of a document nobody may read is missing.
+    await expect(
+      printOrderDocument(makeOrder({ status: 'draft', items: [] }))
+    ).rejects.toMatchObject({
+      name: 'OrderPrintError',
+      code: 'notPrintable',
+    } satisfies Partial<OrderPrintError>);
+  });
+
   it('throws a typed popupBlocked error when the browser blocks the print window', async () => {
     vi.spyOn(window, 'open').mockReturnValue(null);
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:order');
@@ -223,9 +276,7 @@ describe('orderPrinter', () => {
 
   it('resolves quietly when the operator cancels the native print dialog', async () => {
     window.electron = {
-      printReceipt: vi.fn(
-        async () => ({ success: false, errorCode: 'PRINT_CANCELLED' })
-      ),
+      printReceipt: vi.fn(async () => ({ success: false, errorCode: 'PRINT_CANCELLED' })),
     } as unknown as typeof window.electron;
 
     await expect(printOrderDocument(makeOrder())).resolves.toBeUndefined();

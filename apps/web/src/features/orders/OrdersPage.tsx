@@ -9,6 +9,8 @@ import { OrderDetailsModal } from '@/features/orders/OrderDetailsModal';
 import { OrderFinalizeModal, type OrderFinalizeValues } from '@/features/orders/OrderFinalizeModal';
 import { OrdersCheckoutPanel } from '@/features/orders/OrdersCheckoutPanel';
 import { OrdersHistoryTable } from '@/features/orders/OrdersHistoryTable';
+import { OrderPrintError } from '@/features/orders/orderPrinter';
+import { printSavedOrder } from '@/features/orders/printSavedOrder';
 import {
   getOrderCartSummary,
   mergeOrderCartItem,
@@ -40,6 +42,7 @@ export function OrdersPage() {
   const [isFinalizeModalOpen, setIsFinalizeModalOpen] = useState(false);
   const [finalizeModalKey, setFinalizeModalKey] = useState(0);
   const [selectedOrderDialog, setSelectedOrderDialog] = useState<OrderDialogState | null>(null);
+  const [printingOrderId, setPrintingOrderId] = useState<string | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
 
   const ordersQuery = trpc.orders.list.useQuery({ page: 1, perPage: 50 });
@@ -84,6 +87,32 @@ export function OrdersPage() {
 
   const handleOpenOrderReceive = (orderId: string) => {
     setSelectedOrderDialog({ orderId, initialMode: 'receive' });
+  };
+
+  /**
+   * Send the saved order to the supplier.
+   *
+   * The list row has no lines and may be stale, so the order is read back
+   * before printing; a missing order or an incomplete document is reported
+   * instead of printing a sheet the supplier cannot use.
+   */
+  const handlePrintOrder = async (orderId: string) => {
+    if (printingOrderId) {
+      return;
+    }
+
+    setPrintingOrderId(orderId);
+    try {
+      await printSavedOrder(orderId, id => utils.orders.getById.fetch({ id }));
+    } catch (error) {
+      const code = error instanceof OrderPrintError ? error.code : 'unknown';
+      toast.error({
+        title: t('orders:details.printError'),
+        description: t(`orders:details.printErrors.${code}`),
+      });
+    } finally {
+      setPrintingOrderId(null);
+    }
   };
 
   const handleProductSelect = (selection: Parameters<typeof mergeOrderCartItem>[1]) => {
@@ -250,6 +279,10 @@ export function OrdersPage() {
           canManageReceipts={canManageReceipts}
           onView={handleOpenOrderDetails}
           onReceive={handleOpenOrderReceive}
+          onPrintOrder={orderId => {
+            void handlePrintOrder(orderId);
+          }}
+          printingOrderId={printingOrderId}
         />
       </div>
 

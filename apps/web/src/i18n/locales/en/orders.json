@@ -68,6 +68,8 @@
     "loading": "Loading purchase orders...",
     "loadError": "Unable to load purchase orders",
     "receive": "Receive",
+    "printOrder": "Print {{number}}",
+    "printOrderTitle": "Print the purchase order for the supplier",
     "viewOrder": "View {{number}}",
     "viewOrderTitle": "View order"
   },
@@ -127,6 +129,8 @@
     "printError": "Unable to print the purchase order",
     "printErrors": {
       "notPrintable": "Only a submitted or partially received order can be printed.",
+      "missingData": "The purchase order has no provider, date, lines or total, so there is nothing to print.",
+      "notFound": "This purchase order no longer exists. Refresh the list and try again.",
       "popupBlocked": "Allow pop-ups for Puntovivo and try again.",
       "desktopBridgeFailed": "The desktop printer could not process the purchase order.",
       "unknown": "The purchase order could not be printed right now."
