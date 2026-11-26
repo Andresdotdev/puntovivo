@@ -25,6 +25,10 @@
     "PROVIDER_PAYABLE_ALLOCATION_TOTAL_MISMATCH": "Asigne todo el pago o crédito.",
     "PROVIDER_PAYABLE_ALLOCATION_DUPLICATE": "Asigne cada factura una sola vez.",
     "PROVIDER_PAYABLE_INVOICE_NOT_FOUND": "No se encontró la factura del proveedor.",
-    "PROVIDER_PAYABLE_ALLOCATION_EXCEEDS_OUTSTANDING": "Una asignación supera el saldo de la factura."
+    "PROVIDER_PAYABLE_ALLOCATION_EXCEEDS_OUTSTANDING": "Una asignación supera el saldo de la factura.",
+    "PROVIDER_PAYABLE_PURCHASE_DUPLICATED": "Esa compra ya está incluida en otra factura de proveedor. Quite la repetición y vuelva a intentar.",
+    "PROVIDER_PAYABLE_PURCHASE_SITE_MISMATCH": "La factura y las compras que cubre son de sedes distintas. Use una sola sede por factura.",
+    "PROVIDER_PAYABLE_INVOICE_LINES_MISMATCH": "Las líneas de la factura no coinciden con lo que realmente entró en las compras que cubre.",
+    "PROVIDER_PAYABLE_INVOICE_AMOUNT_MISMATCH": "El total de la factura no coincide con el valor de lo recibido en las compras que cubre."
   }
 }
