@@ -19,7 +19,7 @@ import { useSingleFlightSubmit } from '@/lib/useSingleFlightSubmit';
 export interface PurchaseFinalizeValues {
   providerId: string;
   notes: string;
-  documentType: '' | 'invoice' | 'remision' | 'other';
+  documentType: '' | 'invoice' | 'support_document' | 'remision' | 'other';
   documentNumber: string;
   lotReceiptsByItemKey: Record<string, LotReceiptPayload[]>;
 }
@@ -190,6 +190,9 @@ export function PurchaseFinalizeModal({
             >
               <option value="">{t('purchases:document.typeNone')}</option>
               <option value="invoice">{t('purchases:document.typeInvoice')}</option>
+              <option value="support_document">
+                {t('purchases:document.typeSupportDocument')}
+              </option>
               <option value="remision">{t('purchases:document.typeRemision')}</option>
               <option value="other">{t('purchases:document.typeOther')}</option>
             </select>
@@ -203,8 +206,21 @@ export function PurchaseFinalizeModal({
               className="input mt-1"
               maxLength={120}
               placeholder={t('purchases:document.numberPlaceholder')}
-              {...form.register('documentNumber')}
+              {...form.register('documentNumber', {
+                // A remisión is the paper that waits for the invoice, so its
+                // number is what identifies it: without one the pending queue
+                // could neither list it nor match it to its invoice.
+                validate: value =>
+                  form.getValues('documentType') !== 'remision' ||
+                  value.trim().length > 0 ||
+                  t('purchases:document.numberRequiredForRemision'),
+              })}
             />
+            {form.formState.errors.documentNumber && (
+              <p className="mt-1 text-sm text-danger-500" role="alert">
+                {form.formState.errors.documentNumber.message}
+              </p>
+            )}
           </div>
         </div>
 

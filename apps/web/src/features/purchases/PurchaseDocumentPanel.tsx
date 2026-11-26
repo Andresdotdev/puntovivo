@@ -16,6 +16,15 @@ const ACCEPTED_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp
 const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
 const dataUrlPrefix = /^data:[^;]+;base64,/;
 
+/** Label key per recorded paper. A documento soporte is its own Colombian
+ * document, not a free-text `other`. */
+const DOCUMENT_TYPE_LABEL_KEYS: Record<NonNullable<Purchase['documentType']>, string> = {
+  invoice: 'document.typeInvoice',
+  support_document: 'document.typeSupportDocument',
+  remision: 'document.typeRemision',
+  other: 'document.typeOther',
+};
+
 interface DocumentPreview {
   url: string;
   mimeType: string;
@@ -72,9 +81,7 @@ export function PurchaseDocumentPanel({ purchase }: PurchaseDocumentPanelProps) 
 
   const documentTypeLabel =
     purchase.documentType != null
-      ? t(
-          `document.type${purchase.documentType.charAt(0).toUpperCase()}${purchase.documentType.slice(1)}`
-        )
+      ? t(DOCUMENT_TYPE_LABEL_KEYS[purchase.documentType])
       : t('document.typeNone');
   const remision = purchase.remision ?? null;
   const remisionLabel = remision ? t('remision.title', { number: remision.number }) : null;

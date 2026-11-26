@@ -42,7 +42,13 @@ export interface Purchase {
   subtotal: number;
   total: number;
   notes?: string | null;
-  documentType?: 'invoice' | 'remision' | 'other' | null;
+  /**
+   * Paper that backs the receipt. `invoice` is the supplier's invoice;
+   * `support_document` is the documento soporte the business issues and
+   * numbers when the provider is not obliged to invoice; `remision` is the
+   * delivery note, which has no fiscal value and waits for the invoice.
+   */
+  documentType?: 'invoice' | 'support_document' | 'remision' | 'other' | null;
   documentNumber?: string | null;
   /**
    * Delivery note that arrived with the goods. It is an entity of its own, not

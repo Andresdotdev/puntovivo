@@ -9,8 +9,10 @@
  *   of every receipt of that order that actually entered stock;
  * - for a direct purchase with no order, its own lines are both the ordered and
  *   the received quantity;
- * - `invoiced` only when the remisión that documents the goods is already
- *   covered by a supplier invoice.
+ * - `invoiced` when a fiscal paper backs the goods: either the remisión that
+ *   documents them is already covered by a supplier invoice, or the purchase
+ *   itself carries the supplier invoice / the support document the business
+ *   issued. A remisión alone never closes the step.
  *
  * @module application/purchases/flow-stage
  */
@@ -18,7 +20,13 @@ import { roundQuantity } from '@puntovivo/shared/unit-math';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import type { DatabaseInstance } from '../../db/index.js';
-import { orderItems, purchaseItems, purchaseRemisions, purchases } from '../../db/schema.js';
+import {
+  orderItems,
+  purchaseItems,
+  purchaseRemisions,
+  purchases,
+  type PurchaseDocumentType,
+} from '../../db/schema.js';
 import { QUANTITY_EPSILON } from '../../lib/quantity.js';
 
 type PurchaseStatus = NonNullable<(typeof purchases.$inferSelect)['status']>;
@@ -48,19 +56,38 @@ export interface PurchaseFlowProgress {
 export const RECEIVED_PURCHASE_STATUSES = ['completed', 'partial_returned', 'returned'] as const;
 const RECEIVED_PURCHASE_STATUS_SET = new Set<string>(RECEIVED_PURCHASE_STATUSES);
 
+/**
+ * Papers that carry fiscal value and therefore close the receipt as
+ * `facturado` on their own: the supplier invoice, and the support document the
+ * business issues when the provider is not obliged to invoice. The remisión is
+ * absent on purpose: it proves delivery, never the tax event.
+ */
+export const FISCAL_PURCHASE_DOCUMENT_TYPES = ['invoice', 'support_document'] as const;
+const FISCAL_PURCHASE_DOCUMENT_TYPE_SET = new Set<string>(FISCAL_PURCHASE_DOCUMENT_TYPES);
+
+export function isFiscalPurchaseDocument(
+  documentType: PurchaseDocumentType | null | undefined
+): boolean {
+  return documentType != null && FISCAL_PURCHASE_DOCUMENT_TYPE_SET.has(documentType);
+}
+
 export interface PurchaseFlowInput {
   /** Null when the receipt has no stored remisión yet. */
   invoicingStatus: 'pending' | 'invoiced' | null;
+  /** Paper recorded on the purchase itself; null when none was captured. */
+  documentType: PurchaseDocumentType | null;
   orderedQuantity: number;
   receivedQuantity: number;
 }
 
 /**
- * Resolve the step from the quantities and the invoicing status alone.
+ * Resolve the step from the quantities and the documents alone.
  *
  * `facturado` is the last step of a complete flow, so it requires both the full
- * quantity in and an invoiced remisión; a short delivery stays `partial` even
- * when the invoice of what did arrive has already been consolidated.
+ * quantity in and an invoice that backs what arrived — either the consolidated
+ * supplier invoice that covers the remisión, or the fiscal paper recorded on a
+ * direct purchase. A short delivery stays `partial` even when its invoice is
+ * already on file.
  */
 export function resolvePurchaseFlowStage(input: PurchaseFlowInput): PurchaseFlowStage {
   if (input.receivedQuantity <= QUANTITY_EPSILON) {
@@ -69,7 +96,9 @@ export function resolvePurchaseFlowStage(input: PurchaseFlowInput): PurchaseFlow
   if (input.receivedQuantity + QUANTITY_EPSILON < input.orderedQuantity) {
     return 'partial';
   }
-  return input.invoicingStatus === 'invoiced' ? 'invoiced' : 'received';
+  const invoiced =
+    input.invoicingStatus === 'invoiced' || isFiscalPurchaseDocument(input.documentType);
+  return invoiced ? 'invoiced' : 'received';
 }
 
 /** Base-unit quantity of one grouped line, canonicalised across float residue. */
@@ -87,7 +116,12 @@ function toBaseQuantity(sum: number | null): number {
 export function readPurchaseFlowProgress(
   db: DatabaseInstance,
   tenantId: string,
-  rows: ReadonlyArray<{ id: string; orderId: string | null; status: PurchaseStatus }>
+  rows: ReadonlyArray<{
+    id: string;
+    orderId: string | null;
+    status: PurchaseStatus;
+    documentType: PurchaseDocumentType | null;
+  }>
 ): Map<string, PurchaseFlowProgress> {
   const progressByPurchaseId = new Map<string, PurchaseFlowProgress>();
   if (rows.length === 0) {
@@ -191,6 +225,7 @@ export function readPurchaseFlowProgress(
     progressByPurchaseId.set(row.id, {
       stage: resolvePurchaseFlowStage({
         invoicingStatus: invoicingStatusByPurchaseId.get(row.id) ?? null,
+        documentType: row.documentType,
         orderedQuantity,
         receivedQuantity,
       }),

@@ -17,7 +17,15 @@ export const purchaseStatusEnum = z.enum([
   'voided',
 ]);
 
-export const purchaseDocumentTypeEnum = z.enum(['invoice', 'remision', 'other']);
+/** `support_document` is the documento soporte the business issues when the
+ * provider is not obliged to invoice; `remision` is the delivery note, which
+ * has no fiscal value. */
+export const purchaseDocumentTypeEnum = z.enum([
+  'invoice',
+  'support_document',
+  'remision',
+  'other',
+]);
 
 /** Mirrors the schema's invoicing status: a delivery note waits for the
  * supplier invoice that covers it, or is already covered by one. */
@@ -80,13 +88,26 @@ export const getPurchaseInput = z.object({
   id: z.string().min(1, 'ID is required'),
 });
 
-export const createPurchaseInput = z.object({
-  providerId: z.string().min(1, 'Provider is required'),
-  items: z.array(purchaseItemInput).min(1, 'At least one item is required'),
-  notes: z.string().optional(),
-  documentType: purchaseDocumentTypeInput,
-  documentNumber: purchaseDocumentNumberInput,
-});
+export const createPurchaseInput = z
+  .object({
+    providerId: z.string().min(1, 'Provider is required'),
+    items: z.array(purchaseItemInput).min(1, 'At least one item is required'),
+    notes: z.string().optional(),
+    documentType: purchaseDocumentTypeInput,
+    documentNumber: purchaseDocumentNumberInput,
+  })
+  .superRefine((value, ctx) => {
+    // A remisión is the paper that has to wait for the invoice, so its number
+    // is what identifies it: without one it could neither be listed as pending
+    // nor matched to the invoice that later covers it.
+    if (value.documentType === 'remision' && !value.documentNumber) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['documentNumber'],
+        message: 'A remision receipt requires the number printed on the paper',
+      });
+    }
+  });
 
 export const createPurchaseFromOrderInput = z.object({
   orderId: z.string().min(1, 'Order is required'),

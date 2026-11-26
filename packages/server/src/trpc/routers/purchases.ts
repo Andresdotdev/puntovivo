@@ -72,6 +72,7 @@ export const purchasesRouter = router({
           subtotal: purchases.subtotal,
           total: purchases.total,
           notes: purchases.notes,
+          documentType: purchases.documentType,
           createdBy: purchases.createdBy,
           syncStatus: purchases.syncStatus,
           syncVersion: purchases.syncVersion,
@@ -142,12 +143,18 @@ export const purchasesRouter = router({
     const totalItems = countResult?.count ?? 0;
 
     // Which step of the purchase flow each receipt is standing in, read from
-    // the ordered lines, the lines that entered stock and the remisión's
-    // invoicing status. Never inferred from the purchase status alone.
+    // the ordered lines, the lines that entered stock and the paper that backs
+    // it (the consolidated invoice or the purchase's own fiscal document).
+    // Never inferred from the purchase status alone.
     const flowByPurchaseId = readPurchaseFlowProgress(
       ctx.db,
       ctx.tenantId,
-      items.map(item => ({ id: item.id, orderId: item.orderId, status: item.status }))
+      items.map(item => ({
+        id: item.id,
+        orderId: item.orderId,
+        status: item.status,
+        documentType: item.documentType,
+      }))
     );
 
     return {

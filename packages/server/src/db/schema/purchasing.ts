@@ -41,8 +41,16 @@ export const providerPayablePaymentMethodEnum = ['cash', 'card', 'transfer', 'ot
 export type ProviderPayablePaymentMethod = (typeof providerPayablePaymentMethodEnum)[number];
 
 /** Which paper backs a purchase receipt. A remisión travels with the goods;
- * the final invoice may arrive later. Null = not recorded. */
-export const purchaseDocumentTypeEnum = ['invoice', 'remision', 'other'] as const;
+ * the final invoice may arrive later. `support_document` is the Colombian
+ * documento soporte: the paper the buyer itself issues and numbers when the
+ * provider is not obliged to invoice (Res. DIAN 000167 de 2021), so it carries
+ * the same fiscal weight as the supplier invoice. Null = not recorded. */
+export const purchaseDocumentTypeEnum = [
+  'invoice',
+  'support_document',
+  'remision',
+  'other',
+] as const;
 export type PurchaseDocumentType = (typeof purchaseDocumentTypeEnum)[number];
 
 /** Whether a delivery note is still waiting for the supplier invoice that

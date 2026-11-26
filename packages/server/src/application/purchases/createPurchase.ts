@@ -41,6 +41,7 @@ import { getPurchaseRecord } from './purchase-read.js';
 import { resolvePurchaseItems } from './resolveItems.js';
 import type { CriticalPurchaseContext } from './types.js';
 import { receivePurchaseItemLots } from './lots.js';
+import { recordPurchaseRemision } from './remisions.js';
 import {
   assertTenantBusinessClockCurrent,
   resolveTenantBusinessClock,
@@ -279,6 +280,29 @@ export async function createPurchase(ctx: CriticalPurchaseContext, input: Create
       // The supporting document's identity is receipt evidence: record its
       // initial value in the same transaction so the trail can reconstruct
       // which paper the operator claims backs this receipt.
+      //
+      // A remisión is logistics evidence with no fiscal value, so it becomes
+      // its own entity, `pending` until the supplier invoice covers it. That is
+      // what keeps a direct purchase reachable by the pending queue even
+      // though no order exists to receive it from, and the provider-scoped
+      // unique number is what stops the same paper from entering stock twice.
+      const documentNumber = input.documentNumber ?? null;
+      const remisionId =
+        input.documentType === 'remision' && documentNumber
+          ? recordPurchaseRemision(tx as unknown as typeof ctx.db, {
+              tenantId: ctx.tenantId,
+              providerId: input.providerId,
+              siteId: purchaseSite.id,
+              purchaseId,
+              purchaseOrderId: null,
+              number: documentNumber,
+              issuedAt: clock.businessDate,
+              receivedBy: ctx.user.id,
+              receivedAt: now,
+              notes: input.notes ?? null,
+            })
+          : null;
+
       if (input.documentType !== undefined || input.documentNumber !== undefined) {
         writeAuditLog({
           tx,
@@ -290,7 +314,14 @@ export async function createPurchase(ctx: CriticalPurchaseContext, input: Create
           before: null,
           after: {
             documentType: input.documentType ?? null,
-            documentNumber: input.documentNumber ?? null,
+            documentNumber,
+            ...(remisionId
+              ? {
+                  remisionId,
+                  remisionIssuedAt: clock.businessDate,
+                  invoicingStatus: 'pending' as const,
+                }
+              : {}),
           },
           operationId: ctx.envelope.operationId,
         });

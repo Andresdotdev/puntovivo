@@ -129,6 +129,24 @@ describe('PurchaseDetailsContent lot evidence', () => {
     expect(screen.getByRole('button', { name: /Ver documento adjunto/i })).toBeInTheDocument();
   });
 
+  it('labels the documento soporte the business issued', () => {
+    render(
+      <PurchaseDetailsContent
+        purchase={
+          {
+            ...purchase,
+            documentType: 'support_document',
+            documentNumber: 'DS-0007',
+          } as Purchase
+        }
+        returnError={null}
+        voidError={null}
+      />
+    );
+
+    expect(screen.getByText('Documento soporte · DS-0007')).toBeInTheDocument();
+  });
+
   it('shows the delivery note captured at reception with its invoicing status', () => {
     render(
       <PurchaseDetailsContent

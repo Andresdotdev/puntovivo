@@ -139,6 +139,65 @@ describe('PurchaseFinalizeModal', () => {
     );
   });
 
+  it('requires the remisión number before submitting a direct purchase', async () => {
+    const user = userEvent.setup();
+    const onInvalid = vi.fn();
+    const onSubmit = vi.fn(async () => undefined);
+
+    render(
+      <PurchaseFinalizeModal
+        isOpen
+        total={125_000}
+        providers={[provider]}
+        items={[]}
+        isSaving={false}
+        error={null}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+        onInvalid={onInvalid}
+      />
+    );
+
+    await user.selectOptions(screen.getByLabelText('Provider'), provider.id);
+    await user.selectOptions(screen.getByLabelText('Document type'), 'remision');
+    await user.click(screen.getByRole('button', { name: 'Register Purchase' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Enter the delivery note number printed on the paper.'
+    );
+    expect(onInvalid).toHaveBeenCalledOnce();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('records the documento soporte the business issues', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn(async () => undefined);
+
+    render(
+      <PurchaseFinalizeModal
+        isOpen
+        total={125_000}
+        providers={[provider]}
+        items={[]}
+        isSaving={false}
+        error={null}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />
+    );
+
+    await user.selectOptions(screen.getByLabelText('Provider'), provider.id);
+    await user.selectOptions(screen.getByLabelText('Document type'), 'support_document');
+    await user.type(screen.getByLabelText('Document number'), 'DS-0007');
+    await user.click(screen.getByRole('button', { name: 'Register Purchase' }));
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ documentType: 'support_document', documentNumber: 'DS-0007' })
+      )
+    );
+  });
+
   it('requires exact lot identity and submits base-unit receipt provenance', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn(async () => undefined);
