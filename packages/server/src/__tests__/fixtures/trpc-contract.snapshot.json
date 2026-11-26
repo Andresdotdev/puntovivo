@@ -2324,7 +2324,7 @@
   {
     "path": "purchases.create",
     "kind": "mutation",
-    "input": "object{documentNumber?:string[minLength=1,maxLength=120],documentType?:enum(\"invoice\"|\"remision\"|\"other\"),items:array<object>[minItems=1],notes?:string,providerId:string[minLength=1]}",
+    "input": "object{documentNumber?:string[minLength=1,maxLength=120],documentType?:enum(\"invoice\"|\"support_document\"|\"remision\"|\"other\"),items:array<object>[minItems=1],notes?:string,providerId:string[minLength=1]}",
     "output": "inferred"
   },
   {
@@ -2360,7 +2360,7 @@
   {
     "path": "purchases.setDocument",
     "kind": "mutation",
-    "input": "object{documentNumber?:string[minLength=1,maxLength=120],documentType?:enum(\"invoice\"|\"remision\"|\"other\"),purchaseId:string[minLength=1]}",
+    "input": "object{documentNumber?:string[minLength=1,maxLength=120],documentType?:enum(\"invoice\"|\"support_document\"|\"remision\"|\"other\"),purchaseId:string[minLength=1]}",
     "output": "inferred"
   },
   {
