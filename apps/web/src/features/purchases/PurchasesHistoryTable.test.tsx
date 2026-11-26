@@ -98,6 +98,78 @@ describe('PurchasesHistoryTable', () => {
     expect(screen.queryByRole('columnheader', { name: 'Returns' })).not.toBeInTheDocument();
   });
 
+  it('says which step each purchase is in and what comes next', () => {
+    render(
+      <PurchasesHistoryTable
+        purchases={[
+          createPurchase({
+            id: 'purchase-pending',
+            purchaseNumber: 'COM-100001',
+            flow: { stage: 'pending', orderedQuantity: 4, receivedQuantity: 0 },
+          }),
+          createPurchase({
+            id: 'purchase-partial',
+            purchaseNumber: 'COM-100002',
+            flow: { stage: 'partial', orderedQuantity: 10, receivedQuantity: 6 },
+          }),
+          createPurchase({
+            id: 'purchase-received',
+            purchaseNumber: 'COM-100003',
+            flow: { stage: 'received', orderedQuantity: 10, receivedQuantity: 10 },
+          }),
+          createPurchase({
+            id: 'purchase-invoiced',
+            purchaseNumber: 'COM-100004',
+            flow: { stage: 'invoiced', orderedQuantity: 10, receivedQuantity: 10 },
+          }),
+        ]}
+        isLoading={false}
+        error={null}
+        onRetry={vi.fn()}
+        canManageReturns={false}
+        onView={vi.fn()}
+        onReturn={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('columnheader', { name: 'Step' })).toBeInTheDocument();
+
+    // The four steps, in the words the owner used, with the real quantities.
+    expect(screen.getByText('Pending')).toBeInTheDocument();
+    expect(screen.getByText('Partial 6/10')).toBeInTheDocument();
+    expect(screen.getByText('Received')).toBeInTheDocument();
+    expect(screen.getByText('Invoiced')).toBeInTheDocument();
+
+    // And what the employee has to do next, so nothing is guessed.
+    expect(screen.getByText('Next: receive goods')).toBeInTheDocument();
+    expect(screen.getByText('Next: receive the rest')).toBeInTheDocument();
+    expect(screen.getByText('Next: invoice')).toBeInTheDocument();
+    expect(screen.getByText('Next: pay')).toBeInTheDocument();
+  });
+
+  it('keeps the return status badge next to the flow step', () => {
+    render(
+      <PurchasesHistoryTable
+        purchases={[
+          createPurchase({
+            status: 'partial_returned',
+            flow: { stage: 'received', orderedQuantity: 10, receivedQuantity: 10 },
+          }),
+        ]}
+        isLoading={false}
+        error={null}
+        onRetry={vi.fn()}
+        canManageReturns={false}
+        onView={vi.fn()}
+        onReturn={vi.fn()}
+      />
+    );
+
+    // The previous column keeps saying what came back, the new one says the step.
+    expect(screen.getByText('Partial returned')).toBeInTheDocument();
+    expect(screen.getByText('Received')).toBeInTheDocument();
+  });
+
   it('fires onView with the purchase id when Enter is pressed on a focused row', async () => {
     const user = userEvent.setup();
     const onView = vi.fn();

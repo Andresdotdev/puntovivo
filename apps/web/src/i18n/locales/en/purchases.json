@@ -126,7 +126,8 @@
     "returnItemsTitle": "Return items",
     "viewPurchase": "View {{number}}",
     "viewPurchaseTitle": "View purchase",
-    "exportTitle": "Purchase History"
+    "exportTitle": "Purchase History",
+    "flow": "Step"
   },
   "confirm": {
     "void": {
@@ -241,6 +242,20 @@
       "success": "Invoice recorded",
       "successDetail": "The selected delivery notes are now invoiced.",
       "error": "Could not group the delivery notes"
+    }
+  },
+  "flow": {
+    "stage": {
+      "pending": "Pending",
+      "partial": "Partial {{received}}/{{ordered}}",
+      "received": "Received",
+      "invoiced": "Invoiced"
+    },
+    "next": {
+      "pending": "Next: receive goods",
+      "partial": "Next: receive the rest",
+      "received": "Next: invoice",
+      "invoiced": "Next: pay"
     }
   }
 }
