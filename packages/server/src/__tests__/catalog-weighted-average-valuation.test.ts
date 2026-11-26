@@ -147,6 +147,7 @@ describe('catalog weighted average valuation', () => {
         await caller().purchases.createFromOrder({
           orderId: order.id,
           items: [{ orderItemId: order.items[0]!.id, quantity: 2 }],
+          remisionNumber: `REM-${nanoid(10)}`,
         });
       else
         await caller().purchases.create({
@@ -256,6 +257,7 @@ describe('catalog weighted average valuation', () => {
         await caller().purchases.createFromOrder({
           orderId: order.id,
           items: [{ orderItemId: order.items[0]!.id, quantity: 5 }],
+          remisionNumber: `REM-${nanoid(10)}`,
         });
       } else {
         await caller().purchases.create({ providerId, items: [item] });

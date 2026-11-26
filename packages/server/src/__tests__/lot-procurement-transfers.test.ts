@@ -591,6 +591,7 @@ describe('lot-aware procurement and transfers', () => {
           lotReceipts: [{ lotNumber: `FRAC-ORD-A-${nanoid(5)}`, baseQuantity: 0.1 }],
         },
       ],
+      remisionNumber: `REM-${nanoid(10)}`,
     });
     expect((await appRouter.createCaller(fresh()).orders.getById({ id: order.id })).status).toBe(
       'partial_received'
@@ -604,6 +605,7 @@ describe('lot-aware procurement and transfers', () => {
           lotReceipts: [{ lotNumber: `FRAC-ORD-B-${nanoid(5)}`, baseQuantity: 0.2 }],
         },
       ],
+      remisionNumber: `REM-${nanoid(10)}`,
     });
     expect((await appRouter.createCaller(fresh()).orders.getById({ id: order.id })).status).toBe(
       'received'
@@ -801,6 +803,7 @@ describe('lot-aware procurement and transfers', () => {
           lotReceipts: [{ lotNumber: `ORD-A-${nanoid(5)}`, baseQuantity: 4 }],
         },
       ],
+      remisionNumber: `REM-${nanoid(10)}`,
     });
     expect((await caller.orders.getById({ id: order.id })).status).toBe('partial_received');
     expect(first.items[0]!.lots).toHaveLength(1);
@@ -813,6 +816,7 @@ describe('lot-aware procurement and transfers', () => {
           lotReceipts: [{ lotNumber: `ORD-B-${nanoid(5)}`, baseQuantity: 6 }],
         },
       ],
+      remisionNumber: `REM-${nanoid(10)}`,
     });
     expect((await caller.orders.getById({ id: order.id })).status).toBe('received');
     expect(second.items[0]!.sourceOrderItemId).toBe(order.items[0]!.id);

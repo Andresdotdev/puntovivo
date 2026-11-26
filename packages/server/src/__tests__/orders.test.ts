@@ -569,6 +569,7 @@ describe('Orders tRPC Router', () => {
         },
       ],
       notes: 'First truck arrived',
+      remisionNumber: `REM-${nanoid(10)}`,
     });
 
     const listed = await caller.orders.list({ page: 1, perPage: 20 });
@@ -729,6 +730,7 @@ describe('Orders tRPC Router', () => {
       appRouter.createCaller(createTestContext('manager')).purchases.createFromOrder({
         orderId: draft.id,
         items: [{ orderItemId: draft.items[0]!.id, quantity: 1 }],
+        remisionNumber: `REM-${nanoid(10)}`,
       })
     ).rejects.toMatchObject({ cause: { errorCode: 'ORDER_DRAFT_INVALID_STATUS' } });
     expect(getProductStockTotal(db, tenantId, productId)).toBe(2);
@@ -789,6 +791,7 @@ describe('Orders tRPC Router', () => {
       .purchases.createFromOrder({
         orderId: draft.id,
         items: [{ orderItemId: draft.items[0]!.id, quantity: 1 }],
+        remisionNumber: `REM-${nanoid(10)}`,
       });
     expect(receipt.status).toBe('completed');
     expect(getProductStockTotal(db, tenantId, productId)).toBe(3);

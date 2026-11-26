@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -182,5 +182,25 @@ describe('OrderDetailsModal draft lifecycle', () => {
     await user.click(screen.getByRole('button', { name: 'Print order' }));
 
     await waitFor(() => expect(printOrderDocumentMock).toHaveBeenCalledWith(order));
+  });
+
+  it('sends the remisión number captured at reception with the receipt payload', async () => {
+    const user = userEvent.setup();
+    orderState.value = makeOrder('submitted');
+    render(<OrderDetailsModal orderId="order-1" isOpen onClose={vi.fn()} initialMode="receive" />);
+
+    fireEvent.change(screen.getByLabelText('Remision number'), { target: { value: 'REM-0042' } });
+    fireEvent.change(screen.getByLabelText('Receive Quantity'), { target: { value: '3' } });
+    await user.click(screen.getByRole('button', { name: 'Create Receipt' }));
+
+    await waitFor(() =>
+      expect(mutationCalls['purchases.createFromOrder']).toEqual([
+        expect.objectContaining({
+          orderId: 'order-1',
+          remisionNumber: 'REM-0042',
+          items: [expect.objectContaining({ orderItemId: 'order-item-1', quantity: 3 })],
+        }),
+      ])
+    );
   });
 });

@@ -5,6 +5,14 @@ import { render } from '@/test/utils';
 import type { Order } from '@/types';
 import { OrderReceiveModal } from './OrderReceiveModal';
 
+/** Today as the reception form defaults it: local calendar day. */
+function todayCalendarDay(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
 const order = {
   id: 'order-1',
   tenantId: 'tenant-1',
@@ -58,6 +66,7 @@ describe('OrderReceiveModal serialized receipt', () => {
     });
     expect(screen.getByLabelText('Receive Quantity')).toHaveValue(2);
     expect(screen.getByLabelText('Receive Quantity')).toHaveAttribute('readonly');
+    fireEvent.change(screen.getByLabelText('Remision number'), { target: { value: 'REM-1000' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create Receipt' }));
 
     await waitFor(() =>
@@ -70,6 +79,8 @@ describe('OrderReceiveModal serialized receipt', () => {
           },
         ],
         notes: '',
+        remisionNumber: 'REM-1000',
+        remisionDate: todayCalendarDay(),
       })
     );
   });
@@ -100,12 +111,14 @@ describe('OrderReceiveModal serialized receipt', () => {
       target: { value: 'SCN-001\nSCN-002' },
     });
     expect(screen.getByLabelText('Receive Quantity')).toHaveValue(1);
+    fireEvent.change(screen.getByLabelText('Remision number'), { target: { value: 'REM-1001' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create Receipt' }));
 
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
         expect.objectContaining({
           items: [expect.objectContaining({ quantity: 1 })],
+          remisionNumber: 'REM-1001',
         })
       )
     );
@@ -143,6 +156,7 @@ describe('OrderReceiveModal serialized receipt', () => {
     fireEvent.change(screen.getByLabelText('Lot number'), { target: { value: 'RX-LOT-1' } });
     fireEvent.change(screen.getByLabelText('Base quantity'), { target: { value: '3' } });
     expect(screen.getByLabelText('Receive Quantity')).toHaveValue(1.5);
+    fireEvent.change(screen.getByLabelText('Remision number'), { target: { value: 'REM-1002' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create Receipt' }));
 
     await waitFor(() =>
@@ -155,7 +169,99 @@ describe('OrderReceiveModal serialized receipt', () => {
           },
         ],
         notes: '',
+        remisionNumber: 'REM-1002',
+        remisionDate: todayCalendarDay(),
       })
+    );
+  });
+
+  it('requires the remisión number that arrives with the goods', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <OrderReceiveModal
+        isOpen
+        order={order}
+        isSaving={false}
+        error={null}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('Received serial numbers'), {
+      target: { value: 'SCN-001\nSCN-002' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Receipt' }));
+
+    await waitFor(() =>
+      expect(screen.getByText('The remisión number is required')).toBeInTheDocument()
+    );
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('sends the remisión number with today as the default date', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <OrderReceiveModal
+        isOpen
+        order={order}
+        isSaving={false}
+        error={null}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />
+    );
+
+    expect(screen.getByLabelText('Remision date')).toHaveValue(todayCalendarDay());
+    fireEvent.change(screen.getByLabelText('Remision number'), {
+      target: { value: '  REM-0001  ' },
+    });
+    fireEvent.change(screen.getByLabelText('Received serial numbers'), {
+      target: { value: 'SCN-001\nSCN-002' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Receipt' }));
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          remisionNumber: 'REM-0001',
+          remisionDate: todayCalendarDay(),
+        })
+      )
+    );
+  });
+
+  it('keeps the date printed on the paper when the operator corrects it', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <OrderReceiveModal
+        isOpen
+        order={order}
+        isSaving={false}
+        error={null}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('Remision number'), {
+      target: { value: 'REM-YESTERDAY' },
+    });
+    fireEvent.change(screen.getByLabelText('Remision date'), {
+      target: { value: '2026-11-20' },
+    });
+    fireEvent.change(screen.getByLabelText('Received serial numbers'), {
+      target: { value: 'SCN-001\nSCN-002' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Receipt' }));
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          remisionNumber: 'REM-YESTERDAY',
+          remisionDate: '2026-11-20',
+        })
+      )
     );
   });
 });

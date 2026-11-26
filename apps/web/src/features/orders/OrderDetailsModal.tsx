@@ -6,11 +6,7 @@ import { useToast } from '@/components/feedback/ToastProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { OrderDetailsContent } from '@/features/orders/OrderDetailsContent';
 import { OrderReceiveModal, type OrderReceiveValues } from '@/features/orders/OrderReceiveModal';
-import {
-  canPrintOrder,
-  OrderPrintError,
-  printOrderDocument,
-} from '@/features/orders/orderPrinter';
+import { canPrintOrder, OrderPrintError, printOrderDocument } from '@/features/orders/orderPrinter';
 import { onErrorToast } from '@/lib/mutationHelpers';
 import { trpc } from '@/lib/trpc';
 import { translateServerError } from '@/lib/translateServerError';
@@ -168,6 +164,8 @@ export function OrderDetailsModal({
         orderId,
         items: values.items,
         notes: values.notes || undefined,
+        remisionNumber: values.remisionNumber,
+        remisionDate: values.remisionDate || undefined,
       });
     } catch {
       // Error state is handled by the mutation callbacks.

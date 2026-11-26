@@ -203,5 +203,13 @@
     "previewTitle": "Vista previa del documento",
     "close": "Cerrar",
     "download": "Descargar"
+  },
+  "remision": {
+    "title": "Remisión {{number}}",
+    "issuedOn": "Del {{date}}",
+    "invoicingStatus": {
+      "pending": "Pendiente de facturar",
+      "invoiced": "Facturada"
+    }
   }
 }

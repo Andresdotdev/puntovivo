@@ -944,6 +944,7 @@ describe('Purchases tRPC Router', () => {
       orderId,
       items: [{ orderItemId, quantity: 1 }],
       notes: 'First truck',
+      remisionNumber: `REM-${nanoid(10)}`,
     });
 
     expect(firstReceipt.status).toBe('completed');
@@ -1016,10 +1017,12 @@ describe('Purchases tRPC Router', () => {
       caller.purchases.createFromOrder({
         orderId,
         items: [{ orderItemId, quantity: 1 }],
+        remisionNumber: `REM-A-${nanoid(10)}`,
       }),
       caller.purchases.createFromOrder({
         orderId,
         items: [{ orderItemId, quantity: 1 }],
+        remisionNumber: `REM-B-${nanoid(10)}`,
       }),
     ]);
     const completedAttempt = finalAttempts.find(
@@ -1120,6 +1123,7 @@ describe('Purchases tRPC Router', () => {
       caller.purchases.createFromOrder({
         orderId: order.id,
         items: [{ orderItemId, quantity: 2 }],
+        remisionNumber: `REM-${nanoid(10)}`,
       }),
       caller.orders.void({ id: order.id, reason: 'Supplier cancelled at receipt boundary' }),
     ]);
@@ -1377,6 +1381,7 @@ describe('Purchases tRPC Router', () => {
       secondaryCaller.purchases.createFromOrder({
         orderId,
         items: [{ orderItemId, quantity: 2 }],
+        remisionNumber: `REM-${nanoid(10)}`,
       })
     ).rejects.toMatchObject({ cause: { errorCode: 'PURCHASE_SEQUENTIAL_MISSING' } });
 
@@ -1391,6 +1396,7 @@ describe('Purchases tRPC Router', () => {
     const receipt = await secondaryCaller.purchases.createFromOrder({
       orderId,
       items: [{ orderItemId, quantity: 2 }],
+      remisionNumber: `REM-${nanoid(10)}`,
     });
 
     expect(receipt.siteId).toBe(secondarySiteId);
@@ -2690,6 +2696,7 @@ describe('Purchases tRPC Router', () => {
             serialNumbers: ['ORD-SN-001', 'ORD-SN-002'],
           },
         ],
+        remisionNumber: `REM-${nanoid(10)}`,
       });
       const serials = await db
         .select()

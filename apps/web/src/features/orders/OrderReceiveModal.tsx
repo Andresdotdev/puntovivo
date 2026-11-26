@@ -26,6 +26,8 @@ interface OrderReceiveFormValues {
     serialNumbers: string;
   }>;
   notes: string;
+  remisionNumber: string;
+  remisionDate: string;
 }
 
 export interface OrderReceiveValues {
@@ -36,6 +38,18 @@ export interface OrderReceiveValues {
     lotReceipts?: LotReceiptPayload[];
   }>;
   notes: string;
+  /** Supplier number printed on the delivery note that arrived with goods. */
+  remisionNumber: string;
+  /** Issue date on the paper; defaults to today, the day it was received. */
+  remisionDate?: string;
+}
+
+/** Today as the form defaults the remisión date: the local calendar day the
+ * operator receives, which is what the paper in hand says. */
+function todayCalendarDay(now: Date = new Date()): string {
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
 }
 
 interface OrderReceiveModalProps {
@@ -64,6 +78,8 @@ export function OrderReceiveModal({
         serialNumbers: '',
       })),
       notes: '',
+      remisionNumber: '',
+      remisionDate: todayCalendarDay(),
     },
   });
   const [lotDraftsByItemId, setLotDraftsByItemId] = useState<Record<string, LotReceiptDraft[]>>(
@@ -130,7 +146,12 @@ export function OrderReceiveModal({
         });
       }
 
-      await onSubmit({ items: normalizedItems, notes: values.notes });
+      await onSubmit({
+        items: normalizedItems,
+        notes: values.notes,
+        remisionNumber: values.remisionNumber.trim(),
+        ...(values.remisionDate ? { remisionDate: values.remisionDate } : {}),
+      });
     }),
     () => undefined
   );
@@ -156,6 +177,46 @@ export function OrderReceiveModal({
         <div className="rounded-xl border border-primary-200 bg-primary-50 px-4 py-4">
           <p className="text-sm text-primary-700">{t('orders.hint')}</p>
         </div>
+
+        {/* The delivery note is the paper in the operator's hand, so it is the
+            first thing the reception asks for — and the only mandatory field. */}
+        <section className="rounded-xl border border-secondary-200 px-4 py-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="order-receive-remision-number" className="label">
+                {t('orders.remisionNumber')}
+              </label>
+              <input
+                id="order-receive-remision-number"
+                className="input mt-1"
+                maxLength={120}
+                placeholder={t('orders.remisionNumberPlaceholder')}
+                disabled={isSaving}
+                {...form.register('remisionNumber', {
+                  required: t('orders.remisionNumberRequired'),
+                })}
+              />
+              {form.formState.errors.remisionNumber && (
+                <p className="mt-1 text-sm text-danger-500" role="alert">
+                  {form.formState.errors.remisionNumber.message}
+                </p>
+              )}
+            </div>
+            <div>
+              <label htmlFor="order-receive-remision-date" className="label">
+                {t('orders.remisionDate')}
+              </label>
+              <input
+                id="order-receive-remision-date"
+                type="date"
+                className="input mt-1"
+                disabled={isSaving}
+                {...form.register('remisionDate')}
+              />
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-secondary-500">{t('orders.remisionHelp')}</p>
+        </section>
 
         <div className="space-y-3">
           {(order.items ?? []).map((item, index) => {

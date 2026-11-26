@@ -1341,6 +1341,7 @@ describe('blind inventory counts and retail replenishment', () => {
     await caller().purchases.createFromOrder({
       orderId: partialOrder.id,
       items: [{ orderItemId: partialOrder.items[0]!.id, quantity: 2 }],
+      remisionNumber: `REM-${nanoid(10)}`,
     });
     const afterPartialReceipt = await caller().inventory.listReplenishmentSuggestions({
       page: 1,

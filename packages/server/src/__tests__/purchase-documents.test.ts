@@ -230,10 +230,7 @@ describe('Purchase documents', () => {
       .select({ after: auditLogs.after })
       .from(auditLogs)
       .where(
-        and(
-          eq(auditLogs.resourceId, created.id),
-          eq(auditLogs.action, 'purchase.document_updated')
-        )
+        and(eq(auditLogs.resourceId, created.id), eq(auditLogs.action, 'purchase.document_updated'))
       )
       .get();
     expect(identityAudit?.after).toMatchObject({
@@ -242,7 +239,7 @@ describe('Purchase documents', () => {
     });
   });
 
-  it('records the initial document identity when receiving from an order', async () => {
+  it('records the delivery note as its own document when receiving from an order', async () => {
     const db = getDatabase();
     const { providerId, productId } = await seedCatalogFixture();
     const orderItemId = nanoid();
@@ -295,9 +292,20 @@ describe('Purchase documents', () => {
     const received = await caller.purchases.createFromOrder({
       orderId: 'order-remision-1',
       items: [{ orderItemId, quantity: 2 }],
-      documentType: 'remision',
-      documentNumber: 'RM-0099',
+      remisionNumber: 'RM-0099',
     });
+
+    // The remisión is an entity, not a column pair on the purchase.
+    expect(received.remision).toMatchObject({
+      number: 'RM-0099',
+      invoicingStatus: 'pending',
+    });
+    const purchaseRow = db
+      .select({ documentType: purchases.documentType, documentNumber: purchases.documentNumber })
+      .from(purchases)
+      .where(eq(purchases.id, received.id))
+      .get();
+    expect(purchaseRow).toMatchObject({ documentType: null, documentNumber: null });
 
     const identityAudit = db
       .select({ after: auditLogs.after })
@@ -312,6 +320,7 @@ describe('Purchase documents', () => {
     expect(identityAudit?.after).toMatchObject({
       documentType: 'remision',
       documentNumber: 'RM-0099',
+      invoicingStatus: 'pending',
     });
   });
 
@@ -335,7 +344,9 @@ describe('Purchase documents', () => {
     const audit = getDatabase()
       .select({ action: auditLogs.action })
       .from(auditLogs)
-      .where(and(eq(auditLogs.resourceId, purchaseId), eq(auditLogs.action, 'purchase.document_updated')))
+      .where(
+        and(eq(auditLogs.resourceId, purchaseId), eq(auditLogs.action, 'purchase.document_updated'))
+      )
       .all();
     expect(audit.length).toBeGreaterThanOrEqual(2);
   });
@@ -369,7 +380,12 @@ describe('Purchase documents', () => {
     const audit = getDatabase()
       .select({ action: auditLogs.action })
       .from(auditLogs)
-      .where(and(eq(auditLogs.resourceId, purchaseId), eq(auditLogs.action, 'purchase.document_attached')))
+      .where(
+        and(
+          eq(auditLogs.resourceId, purchaseId),
+          eq(auditLogs.action, 'purchase.document_attached')
+        )
+      )
       .all();
     expect(audit.length).toBe(1);
   });

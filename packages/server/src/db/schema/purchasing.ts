@@ -45,6 +45,12 @@ export type ProviderPayablePaymentMethod = (typeof providerPayablePaymentMethodE
 export const purchaseDocumentTypeEnum = ['invoice', 'remision', 'other'] as const;
 export type PurchaseDocumentType = (typeof purchaseDocumentTypeEnum)[number];
 
+/** Whether a delivery note is still waiting for the supplier invoice that
+ * covers it. A remisión has no fiscal effect: it only becomes payable once it
+ * is consolidated into an invoice. */
+export const remisionInvoicingStatusEnum = ['pending', 'invoiced'] as const;
+export type RemisionInvoicingStatus = (typeof remisionInvoicingStatusEnum)[number];
+
 // ============================================================================
 // PURCHASES
 // ============================================================================
@@ -400,10 +406,7 @@ export const providerPayableInvoicePurchases = sqliteTable(
     createdAt: text('created_at').notNull().default(sqliteNow).$defaultFn(nowIso),
   },
   table => [
-    index('idx_provider_payable_invoice_purchases_tenant').on(
-      table.tenantId,
-      table.createdAt
-    ),
+    index('idx_provider_payable_invoice_purchases_tenant').on(table.tenantId, table.createdAt),
     index('idx_provider_payable_invoice_purchases_invoice').on(table.invoiceId),
     uniqueIndex('idx_provider_payable_invoice_purchases_purchase').on(
       table.tenantId,
@@ -624,6 +627,115 @@ export const providerPayableAllocationsRelations = relations(
     }),
   })
 );
+
+// ============================================================================
+// PURCHASE REMISIONS
+// ============================================================================
+
+/**
+ * The delivery note (remisión) that travelled with the goods of one receipt.
+ *
+ * Colombian flow: a purchase order may be delivered in several remisiones, and
+ * the supplier invoice may cover one or more of them. The remisión is logistics
+ * evidence, never a fiscal document, so it carries its own identity (number,
+ * issue date, provider, site, receiving user) plus an invoicing status that the
+ * consolidated supplier invoice closes.
+ *
+ * Declared after the payable tables because `payable_invoice_id` points at the
+ * invoice that covers this delivery once it is invoiced.
+ */
+export const purchaseRemisions = sqliteTable(
+  'purchase_remisions',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    providerId: text('provider_id')
+      .notNull()
+      .references(() => providers.id),
+    siteId: text('site_id')
+      .notNull()
+      .references(() => sites.id),
+    /** The receipt this note delivered. One receipt produces one remisión. */
+    purchaseId: text('purchase_id')
+      .notNull()
+      .references(() => purchases.id),
+    /** Null when the goods arrived as a direct purchase without an order. */
+    purchaseOrderId: text('purchase_order_id').references(() => orders.id),
+    /** Supplier-side number printed on the paper. Unique per provider. */
+    number: text('number').notNull(),
+    issuedAt: text('issued_at').notNull(),
+    invoicingStatus: text('invoicing_status', { enum: remisionInvoicingStatusEnum })
+      .notNull()
+      .default('pending'),
+    payableInvoiceId: text('payable_invoice_id').references(() => providerPayableInvoices.id),
+    receivedBy: text('received_by')
+      .notNull()
+      .references(() => users.id),
+    receivedAt: text('received_at').notNull(),
+    notes: text('notes'),
+    syncStatus: text('sync_status', { enum: syncStatusEnum }).default('pending'),
+    syncVersion: integer('sync_version').default(1),
+    createdAt: text('created_at').notNull().default(sqliteNow).$defaultFn(nowIso),
+    updatedAt: text('updated_at').notNull().default(sqliteNow).$defaultFn(nowIso),
+  },
+  table => [
+    index('idx_purchase_remisions_tenant_provider_status').on(
+      table.tenantId,
+      table.providerId,
+      table.invoicingStatus
+    ),
+    index('idx_purchase_remisions_tenant_created').on(table.tenantId, table.createdAt),
+    index('idx_purchase_remisions_order').on(table.purchaseOrderId),
+    index('idx_purchase_remisions_invoice').on(table.payableInvoiceId),
+    // One receipt produces exactly one remisión.
+    uniqueIndex('idx_purchase_remisions_purchase').on(table.purchaseId),
+    // The same paper cannot enter stock twice for the same provider.
+    uniqueIndex('idx_purchase_remisions_provider_number').on(
+      table.tenantId,
+      table.providerId,
+      table.number
+    ),
+    check('chk_purchase_remisions_number_present', sql`length(trim(${table.number})) > 0`),
+    // Invoicing status and its invoice reference can never disagree.
+    check(
+      'chk_purchase_remisions_invoicing_state',
+      sql`(${table.invoicingStatus} = 'invoiced' AND ${table.payableInvoiceId} IS NOT NULL) OR (${table.invoicingStatus} = 'pending' AND ${table.payableInvoiceId} IS NULL)`
+    ),
+  ]
+);
+
+export const purchaseRemisionsRelations = relations(purchaseRemisions, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [purchaseRemisions.tenantId],
+    references: [tenants.id],
+  }),
+  provider: one(providers, {
+    fields: [purchaseRemisions.providerId],
+    references: [providers.id],
+  }),
+  site: one(sites, {
+    fields: [purchaseRemisions.siteId],
+    references: [sites.id],
+  }),
+  purchase: one(purchases, {
+    fields: [purchaseRemisions.purchaseId],
+    references: [purchases.id],
+  }),
+  purchaseOrder: one(orders, {
+    fields: [purchaseRemisions.purchaseOrderId],
+    references: [orders.id],
+  }),
+  payableInvoice: one(providerPayableInvoices, {
+    fields: [purchaseRemisions.payableInvoiceId],
+    references: [providerPayableInvoices.id],
+  }),
+  receivedByUser: one(users, {
+    fields: [purchaseRemisions.receivedBy],
+    references: [users.id],
+  }),
+}));
 
 // ============================================================================
 // PURCHASE RETURNS
