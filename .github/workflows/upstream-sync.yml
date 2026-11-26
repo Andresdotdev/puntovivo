@@ -3,6 +3,20 @@ name: Upstream sync
 # Keeps this fork's `main` aligned with the owner's repository, and reports how
 # far each working branch is behind. It never merges into a branch that has an
 # open pull request: that history is what the maintainer is reviewing.
+#
+# Pushing to `main` needs two things this workflow cannot grant itself:
+#
+#   1. A token allowed to update workflow files. The owner's repository changes
+#      files under `.github/workflows/`, and GitHub refuses to let a GitHub App
+#      (which is what the default GITHUB_TOKEN is) create or update them without
+#      a `workflows` permission the token does not have. Add a personal access
+#      token with `repo` and `workflow` scopes as the secret
+#      UPSTREAM_SYNC_TOKEN.
+#   2. That same actor allowed through this fork's ruleset on `main`, either by
+#      adding it to the ruleset's bypass list or by relaxing the rule.
+#
+# Without both, the job still reports the per-branch drift and then stops with a
+# named error instead of a mystery failure.
 
 on:
   schedule:
@@ -25,8 +39,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.UPSTREAM_SYNC_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Merge the owner's main into this fork's main
+        id: merge
         run: |
           git config user.name 'upstream-sync'
           git config user.email 'actions@users.noreply.github.com'
@@ -34,12 +50,32 @@ jobs:
           git fetch upstream main --quiet
           if git merge-base --is-ancestor upstream/main HEAD; then
             echo "already up to date with upstream/main"
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git merge --no-edit upstream/main
-          git push origin HEAD:main
+          echo "pushed=pending" >> "$GITHUB_OUTPUT"
+
+      - name: Push the merge
+        id: push
+        if: steps.merge.outputs.pushed == 'pending'
+        run: |
+          if git push origin HEAD:main 2>&1 | tee push.log; then
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "pushed=false" >> "$GITHUB_OUTPUT"
+          if grep -q 'workflow' push.log; then
+            echo "::error title=Needs a token with the workflows scope::The merge touches .github/workflows and the default GITHUB_TOKEN is not allowed to write those files. Add a personal access token with repo and workflow scopes as UPSTREAM_SYNC_TOKEN, and let that actor through the ruleset on main."
+          elif grep -q 'GH013\|repository rule' push.log; then
+            echo "::error title=Blocked by the ruleset on main::This fork's ruleset refuses the push. Add the pushing actor to the ruleset's bypass list, or merge the sync pull request by hand."
+          else
+            echo "::error title=Push rejected::See the log above for the remote's answer."
+          fi
+          exit 1
 
       - name: Report how far each branch is behind
+        if: always()
         run: node scripts/check-upstream-sync.mjs --no-fetch
 
       - name: Summarise
@@ -48,6 +84,13 @@ jobs:
           {
             echo '### Upstream sync'
             echo ''
-            echo '`main` was fast-forwarded or merged from `johnny4young/puntovivo`.'
+            if [ "${{ steps.push.outputs.pushed }}" = "true" ]; then
+              echo '`main` was merged with `johnny4young/puntovivo`.'
+            elif [ "${{ steps.merge.outputs.pushed }}" = "false" ]; then
+              echo '`main` was already current.'
+            else
+              echo 'The merge could not be pushed. The step above names the exact setting to change.'
+            fi
+            echo ''
             echo 'Working branches were reported only — nothing was merged into them.'
           } >> "$GITHUB_STEP_SUMMARY"
