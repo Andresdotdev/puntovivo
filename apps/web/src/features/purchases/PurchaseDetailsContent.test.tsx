@@ -107,17 +107,19 @@ describe('PurchaseDetailsContent lot evidence', () => {
   it('labels the recorded remisión and offers to view its attachment', () => {
     render(
       <PurchaseDetailsContent
-        purchase={{
-          ...purchase,
-          documentType: 'remision',
-          documentNumber: 'RM-0042',
-          document: {
-            fileName: 'remision.png',
-            mimeType: 'image/png',
-            sizeBytes: 1024,
-            createdAt: '2030-01-01T12:00:00.000Z',
-          },
-        } as Purchase}
+        purchase={
+          {
+            ...purchase,
+            documentType: 'remision',
+            documentNumber: 'RM-0042',
+            document: {
+              fileName: 'remision.png',
+              mimeType: 'image/png',
+              sizeBytes: 1024,
+              createdAt: '2030-01-01T12:00:00.000Z',
+            },
+          } as Purchase
+        }
         returnError={null}
         voidError={null}
       />
@@ -125,5 +127,71 @@ describe('PurchaseDetailsContent lot evidence', () => {
 
     expect(screen.getByText('Remisión · RM-0042')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Ver documento adjunto/i })).toBeInTheDocument();
+  });
+
+  it('shows the delivery note captured at reception with its invoicing status', () => {
+    render(
+      <PurchaseDetailsContent
+        purchase={
+          {
+            ...purchase,
+            remision: {
+              id: 'remision-1',
+              tenantId: 'tenant-1',
+              providerId: 'provider-1',
+              siteId: 'site-1',
+              purchaseId: 'purchase-1',
+              purchaseOrderId: 'order-1',
+              number: 'REM-0001',
+              issuedAt: '2026-11-20',
+              invoicingStatus: 'pending',
+              payableInvoiceId: null,
+              receivedBy: 'user-1',
+              receivedAt: '2030-01-01T12:00:00.000Z',
+              notes: null,
+            },
+          } as Purchase
+        }
+        returnError={null}
+        voidError={null}
+      />
+    );
+
+    expect(screen.getByText('Remisión REM-0001')).toBeInTheDocument();
+    expect(screen.getByText('Pendiente de facturar')).toBeInTheDocument();
+    expect(screen.queryByText('Sin documento')).not.toBeInTheDocument();
+  });
+
+  it('shows an invoiced delivery note as billed', () => {
+    render(
+      <PurchaseDetailsContent
+        purchase={
+          {
+            ...purchase,
+            remision: {
+              id: 'remision-1',
+              tenantId: 'tenant-1',
+              providerId: 'provider-1',
+              siteId: 'site-1',
+              purchaseId: 'purchase-1',
+              purchaseOrderId: null,
+              number: 'REM-0002',
+              issuedAt: '2026-11-21',
+              invoicingStatus: 'invoiced',
+              payableInvoiceId: 'invoice-1',
+              receivedBy: 'user-1',
+              receivedAt: '2030-01-01T12:00:00.000Z',
+              notes: null,
+            },
+          } as Purchase
+        }
+        returnError={null}
+        voidError={null}
+      />
+    );
+
+    expect(screen.getByText('Remisión REM-0002')).toBeInTheDocument();
+    expect(screen.getByText('Facturada')).toBeInTheDocument();
+    expect(screen.queryByText('Pendiente de facturar')).not.toBeInTheDocument();
   });
 });

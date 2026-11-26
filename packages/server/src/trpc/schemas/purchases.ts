@@ -19,6 +19,10 @@ export const purchaseStatusEnum = z.enum([
 
 export const purchaseDocumentTypeEnum = z.enum(['invoice', 'remision', 'other']);
 
+/** Mirrors the schema's invoicing status: a delivery note waits for the
+ * supplier invoice that covers it, or is already covered by one. */
+export const remisionInvoicingStatusEnum = z.enum(['pending', 'invoiced']);
+
 /** Mirrors the invoice-OCR upload budget: a supporting paper for one
  * purchase never needs more headroom than the OCR intake allows. */
 export const PURCHASE_DOCUMENT_MIME_TYPES = [
@@ -88,8 +92,16 @@ export const createPurchaseFromOrderInput = z.object({
   orderId: z.string().min(1, 'Order is required'),
   items: z.array(receiveOrderItemInput).min(1, 'At least one received item is required').optional(),
   notes: z.string().optional(),
-  documentType: purchaseDocumentTypeInput,
-  documentNumber: purchaseDocumentNumberInput,
+  /** The delivery note the transport handed over with the goods. It is the
+   * only new mandatory field of the reception step: everything else defaults
+   * (date = the day the paper was read, type = remisión by definition). */
+  remisionNumber: z
+    .string()
+    .trim()
+    .min(1, 'Remision number is required')
+    .max(120, 'Remision number is too long'),
+  /** Issue date printed on the paper; defaults to the receipt business date. */
+  remisionDate: isoDateField('Remision date must be a valid date').optional(),
 });
 
 export const setPurchaseDocumentInput = z.object({

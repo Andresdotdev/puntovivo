@@ -25,6 +25,12 @@ export interface Purchase {
   notes?: string | null;
   documentType?: 'invoice' | 'remision' | 'other' | null;
   documentNumber?: string | null;
+  /**
+   * Delivery note that arrived with the goods. It is an entity of its own, not
+   * a label on the purchase: it carries its number, the date printed on the
+   * paper and whether the supplier invoice already covers it.
+   */
+  remision?: PurchaseRemision | null;
   document?: {
     fileName: string | null;
     mimeType: string;
@@ -36,6 +42,25 @@ export interface Purchase {
   updatedAt: string;
   syncStatus?: SyncStatus | null;
   syncVersion?: number | null;
+}
+
+export interface PurchaseRemision {
+  id: string;
+  tenantId: string;
+  providerId: string;
+  siteId: string;
+  /** Receipt that delivered this note's goods: one receipt, one remisión. */
+  purchaseId: string;
+  /** Null when the goods arrived as a direct purchase without an order. */
+  purchaseOrderId?: string | null;
+  number: string;
+  /** Issue date on the paper (`YYYY-MM-DD`). */
+  issuedAt: string;
+  invoicingStatus: 'pending' | 'invoiced';
+  payableInvoiceId?: string | null;
+  receivedBy: string;
+  receivedAt: string;
+  notes?: string | null;
 }
 
 export interface PurchaseItem {

@@ -5,6 +5,7 @@ import { trpc } from '@/lib/trpc';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { invalidateGroups } from '@/lib/invalidateGroups';
 import { formatDateTime } from '@/lib/utils';
+import { formatLotExpiryDate } from '@/features/inventory/lotForm';
 import type { Purchase } from '@/types';
 
 interface PurchaseDocumentPanelProps {
@@ -71,8 +72,12 @@ export function PurchaseDocumentPanel({ purchase }: PurchaseDocumentPanelProps) 
 
   const documentTypeLabel =
     purchase.documentType != null
-      ? t(`document.type${purchase.documentType.charAt(0).toUpperCase()}${purchase.documentType.slice(1)}`)
+      ? t(
+          `document.type${purchase.documentType.charAt(0).toUpperCase()}${purchase.documentType.slice(1)}`
+        )
       : t('document.typeNone');
+  const remision = purchase.remision ?? null;
+  const remisionLabel = remision ? t('remision.title', { number: remision.number }) : null;
 
   const handleFileSelected = async (file: File) => {
     if (!ACCEPTED_MIME.includes(file.type as (typeof ACCEPTED_MIME)[number])) {
@@ -123,13 +128,23 @@ export function PurchaseDocumentPanel({ purchase }: PurchaseDocumentPanelProps) 
 
   return (
     <div className="rounded-xl border border-secondary-200 bg-secondary-50 px-4 py-4">
-      <p className="text-xs uppercase tracking-wide text-secondary-500">
-        {t('document.title')}
-      </p>
+      <p className="text-xs uppercase tracking-wide text-secondary-500">{t('document.title')}</p>
       <p className="mt-2 text-sm font-medium text-secondary-900">
-        {documentTypeLabel}
-        {purchase.documentNumber ? ` · ${purchase.documentNumber}` : ''}
+        {remisionLabel ?? documentTypeLabel}
+        {remision ? '' : purchase.documentNumber ? ` · ${purchase.documentNumber}` : ''}
       </p>
+
+      {/* The delivery note is the identity of a received purchase; its
+          invoicing status is what the supplier invoice will close later. */}
+      {remision && (
+        <p className="mt-1 text-xs text-secondary-600">
+          {t('remision.issuedOn', { date: formatLotExpiryDate(remision.issuedAt) })}
+          {' · '}
+          <span className="font-medium">
+            {t(`remision.invoicingStatus.${remision.invoicingStatus}`)}
+          </span>
+        </p>
+      )}
 
       {attached ? (
         <div className="mt-2 flex flex-wrap items-center gap-3">

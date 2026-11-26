@@ -42,6 +42,7 @@ import { allocateNextSequential } from '../../services/sequential-allocation.js'
 import type { CreatePurchaseFromOrderInput } from '../../trpc/schemas/purchases.js';
 import { getInventoryBalanceStateForSite, getPurchaseSequentialContext } from './helpers.js';
 import { getPurchaseRecord } from './purchase-read.js';
+import { recordPurchaseRemision } from './remisions.js';
 import { resolveOrderReceiptItems } from './resolveItems.js';
 import type { CriticalPurchaseContext } from './types.js';
 import { receivePurchaseItemLots } from './lots.js';
@@ -207,8 +208,6 @@ export async function createPurchaseFromOrder(
           subtotal,
           total,
           notes: `${orderRecord.notes ? `${orderRecord.notes} | ` : ''}${input.notes ? `${input.notes} | ` : ''}Received from order ${orderRecord.orderNumber}`,
-          documentType: input.documentType ?? null,
-          documentNumber: input.documentNumber ?? null,
           createdBy: ctx.user!.id,
           syncStatus: 'pending',
           syncVersion: 1,
@@ -216,6 +215,23 @@ export async function createPurchaseFromOrder(
           updatedAt: now,
         })
         .run();
+
+      // The delivery note arrives with the goods: the operator reads its
+      // number off the paper in hand, so it is captured here and not when the
+      // order was registered. Rejecting a repeated number is what keeps one
+      // piece of paper from entering stock twice.
+      const remisionId = recordPurchaseRemision(tx as unknown as typeof ctx.db, {
+        tenantId: ctx.tenantId,
+        providerId: orderRecord.providerId,
+        siteId: orderRecord.siteId,
+        purchaseId,
+        purchaseOrderId: input.orderId,
+        number: input.remisionNumber,
+        issuedAt: input.remisionDate ?? clock.businessDate,
+        receivedBy: ctx.user.id,
+        receivedAt: now,
+        notes: input.notes ?? null,
+      });
 
       const mutatedLotIds: string[] = [];
       for (const row of resolvedItems.rows) {
@@ -382,24 +398,25 @@ export async function createPurchaseFromOrder(
         operationId: ctx.envelope.operationId,
       });
 
-      // Same receipt-evidence rule as the direct path: the supporting
-      // document's identity is recorded when the operator supplies it.
-      if (input.documentType !== undefined || input.documentNumber !== undefined) {
-        writeAuditLog({
-          tx,
-          tenantId: ctx.tenantId,
-          actorId: ctx.user.id,
-          action: 'purchase.document_updated',
-          resourceType: 'purchase',
-          resourceId: purchaseId,
-          before: null,
-          after: {
-            documentType: input.documentType ?? null,
-            documentNumber: input.documentNumber ?? null,
-          },
-          operationId: ctx.envelope.operationId,
-        });
-      }
+      // Same receipt-evidence rule as the direct path: the delivery note's
+      // identity is recorded together with the receipt that delivered it.
+      writeAuditLog({
+        tx,
+        tenantId: ctx.tenantId,
+        actorId: ctx.user.id,
+        action: 'purchase.document_updated',
+        resourceType: 'purchase',
+        resourceId: purchaseId,
+        before: null,
+        after: {
+          documentType: 'remision',
+          documentNumber: input.remisionNumber.trim(),
+          remisionId,
+          remisionIssuedAt: input.remisionDate ?? clock.businessDate,
+          invoicingStatus: 'pending',
+        },
+        operationId: ctx.envelope.operationId,
+      });
 
       const syncContext = { ...ctx, db: tx as unknown as typeof ctx.db };
       enqueueSyncInTransaction(syncContext, {

@@ -27,6 +27,7 @@ import {
   purchaseReturnItems,
   purchaseReturns,
   purchaseDocuments,
+  purchaseRemisions,
   purchases,
   sites,
   units,
@@ -84,6 +85,30 @@ export function getPurchaseRecord(db: DatabaseInstance, tenantId: string, purcha
     })
     .from(purchaseDocuments)
     .where(eq(purchaseDocuments.purchaseId, purchaseId))
+    .get();
+
+  // The delivery note is an entity of its own: its number, the date printed
+  // on the paper and whether the supplier invoice already covers it.
+  const remision = db
+    .select({
+      id: purchaseRemisions.id,
+      tenantId: purchaseRemisions.tenantId,
+      providerId: purchaseRemisions.providerId,
+      siteId: purchaseRemisions.siteId,
+      purchaseId: purchaseRemisions.purchaseId,
+      purchaseOrderId: purchaseRemisions.purchaseOrderId,
+      number: purchaseRemisions.number,
+      issuedAt: purchaseRemisions.issuedAt,
+      invoicingStatus: purchaseRemisions.invoicingStatus,
+      payableInvoiceId: purchaseRemisions.payableInvoiceId,
+      receivedBy: purchaseRemisions.receivedBy,
+      receivedAt: purchaseRemisions.receivedAt,
+      notes: purchaseRemisions.notes,
+    })
+    .from(purchaseRemisions)
+    .where(
+      and(eq(purchaseRemisions.purchaseId, purchaseId), eq(purchaseRemisions.tenantId, tenantId))
+    )
     .get();
 
   const items = db
@@ -355,6 +380,7 @@ export function getPurchaseRecord(db: DatabaseInstance, tenantId: string, purcha
   return {
     ...purchase,
     document: document ?? null,
+    remision: remision ?? null,
     returnedAmount,
     returnedAt,
     latestReturnReason,

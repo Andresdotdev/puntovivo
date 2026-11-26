@@ -202,5 +202,13 @@
     "previewTitle": "Document preview",
     "close": "Close",
     "download": "Download"
+  },
+  "remision": {
+    "title": "Delivery note {{number}}",
+    "issuedOn": "Dated {{date}}",
+    "invoicingStatus": {
+      "pending": "Pending invoice",
+      "invoiced": "Invoiced"
+    }
   }
 }

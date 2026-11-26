@@ -911,6 +911,7 @@ describe('fractional carrying value across sale lifecycle', () => {
                 ...(lotReceipts ? { lotReceipts } : {}),
               },
             ],
+            remisionNumber: `REM-${nanoid(10)}`,
           })
         : await caller().purchases.create({
             providerId,
@@ -1161,6 +1162,7 @@ describe('fractional carrying value across sale lifecycle', () => {
         ? await caller().purchases.createFromOrder({
             orderId: order.id,
             items: [{ orderItemId: order.items[0]!.id, quantity: 1, serialNumbers }],
+            remisionNumber: `REM-${nanoid(10)}`,
           })
         : await caller().purchases.create({
             providerId,
