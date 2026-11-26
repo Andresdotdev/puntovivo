@@ -778,6 +778,20 @@
       "when": 1795396828793,
       "tag": "0110_user_kind_service",
       "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "6",
+      "when": 1795619187031,
+      "tag": "0112_purchase_document_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "6",
+      "when": 1795619863980,
+      "tag": "0113_provider_payable_invoice_purchases",
+      "breakpoints": true
     }
   ]
 }
