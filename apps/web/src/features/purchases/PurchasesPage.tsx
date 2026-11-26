@@ -7,6 +7,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { InvoiceOcrDialog } from '@/features/ai-invoice-ocr';
 import { useAiFeatureFlag } from '@/features/ai-shared';
 import { PurchaseCartTable } from '@/features/purchases/PurchaseCartTable';
+import { PendingRemisionsPanel } from '@/features/purchases/PendingRemisionsPanel';
 import { PurchasesCheckoutPanel } from '@/features/purchases/PurchasesCheckoutPanel';
 import { PurchaseDetailsModal } from '@/features/purchases/PurchaseDetailsModal';
 import {
@@ -321,6 +322,13 @@ export function PurchasesPage() {
             onFinalize={handleOpenFinalizeModal}
           />
         </div>
+
+        <PendingRemisionsPanel
+          providers={providers}
+          onGrouped={() => {
+            void purchasesQuery.refetch();
+          }}
+        />
 
         <PurchasesHistoryTable
           purchases={purchases}

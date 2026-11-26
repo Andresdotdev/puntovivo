@@ -11,6 +11,16 @@ function occursOnOrAfter(later: string, earlier: string): boolean {
 
 export const providerPayableOverviewInput = providerIdInput;
 
+/** Pending delivery notes of one provider, bounded and searchable the same
+ * way the purchase picker is. */
+export const pendingProviderRemisionsInput = providerIdInput.extend({
+  siteId: z.string().min(1).optional(),
+  search: z.string().trim().max(80).default(''),
+  page: z.number().int().min(1).max(1_000_000).default(1),
+  perPage: z.number().int().min(1).max(100).default(25),
+});
+export type PendingProviderRemisionsInput = z.infer<typeof pendingProviderRemisionsInput>;
+
 export const availableProviderPurchasesInput = providerIdInput.extend({
   siteId: z.string().min(1).optional(),
   search: z.string().trim().max(80).default(''),
@@ -39,6 +49,20 @@ export const createProviderInvoiceInput = z
     /** Several deliveries (remisiones) consolidated by one final invoice.
      * Takes precedence over the legacy single purchaseId. */
     purchaseIds: z.array(z.string().min(1)).min(1).max(50).optional(),
+    /** Pending delivery notes the supplier invoice covers. This is the flow
+     * the owner described: when the factura arrives, the operator picks the
+     * remisiones it groups and the invoice closes them all. Its lines are
+     * derived from what those deliveries left in the store. */
+    remisionIds: z
+      .array(z.string().min(1))
+      .min(1)
+      .max(50)
+      .superRefine((ids, ctx) => {
+        if (new Set(ids).size !== ids.length) {
+          ctx.addIssue({ code: 'custom', message: 'Remisión ids must be unique' });
+        }
+      })
+      .optional(),
     /** Invoice lines as printed by the supplier. Required when consolidating
      * several purchases: each product must match what was received, in base
      * units, before the invoice is accepted. */
@@ -55,10 +79,25 @@ export const createProviderInvoiceInput = z
     path: ['dueAt'],
   })
   .refine(
-    value => !((value.purchaseIds?.length ?? 0) > 1 && !value.lines?.length),
+    value =>
+      !(
+        !value.remisionIds?.length &&
+        (value.purchaseIds?.length ?? 0) > 1 &&
+        !value.lines?.length
+      ),
     {
       message: 'Invoice lines are required when consolidating several purchases',
       path: ['lines'],
+    }
+  )
+  // The remisiones already say which deliveries the invoice covers. Sending
+  // purchases beside them can only contradict that, so it is refused instead
+  // of silently honoured one way or the other.
+  .refine(
+    value => !(value.remisionIds?.length && (value.purchaseId || value.purchaseIds?.length)),
+    {
+      message: 'remisionIds already identify the covered deliveries: drop purchaseId and purchaseIds',
+      path: ['remisionIds'],
     }
   )
   // Two keys that disagree about what the invoice covers is not a preference

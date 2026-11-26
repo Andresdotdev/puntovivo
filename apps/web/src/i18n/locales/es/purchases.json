@@ -211,5 +211,37 @@
       "pending": "Pendiente de facturar",
       "invoiced": "Facturada"
     }
+  },
+  "pendingRemisions": {
+    "title": "Remisiones pendientes de facturar",
+    "description": "Elija el proveedor y las remisiones que cubre la factura que acaba de llegar. Cada remisión seleccionada queda facturada y apunta a esa factura.",
+    "provider": "Proveedor",
+    "selectProvider": "Seleccione proveedor",
+    "pickProvider": "Seleccione un proveedor para ver las remisiones pendientes.",
+    "loading": "Cargando remisiones pendientes...",
+    "empty": "Este proveedor no tiene remisiones pendientes de facturar.",
+    "retry": "Reintentar",
+    "columns": {
+      "select": "Incluir",
+      "number": "Remisión",
+      "issuedAt": "Fecha",
+      "purchase": "Recibo",
+      "site": "Sede",
+      "netTotal": "Valor neto"
+    },
+    "selectRemision": "Incluir la remisión {{number}} en la factura",
+    "selectionSummary": "{{count}} remisión(es) por {{total}}",
+    "documentNumber": "Número de factura",
+    "issuedAt": "Fecha de la factura",
+    "dueAt": "Fecha de vencimiento",
+    "amount": "Total de la factura",
+    "dateInvalid": "La fecha de vencimiento no puede ser anterior a la de la factura.",
+    "submit": "Agrupar en una factura",
+    "submitting": "Agrupando...",
+    "toast": {
+      "success": "Factura registrada",
+      "successDetail": "Las remisiones seleccionadas quedaron facturadas.",
+      "error": "No se pudo agrupar las remisiones"
+    }
   }
 }

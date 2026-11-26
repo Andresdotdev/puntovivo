@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
-import { roundQuantity } from '@puntovivo/shared/unit-math';
+import { TRPCError } from '@trpc/server';
 
 import type { DatabaseInstance } from '../../db/index.js';
 import {
@@ -10,12 +10,15 @@ import {
   providerPayableInvoices,
   providerPayablePayments,
   providers,
-  purchaseItems,
-  purchaseReturnItems,
-  purchaseReturns,
+  purchaseRemisions,
   purchases,
   sites,
 } from '../../db/schema.js';
+import { readPendingProviderRemisions } from './pending-remisions.js';
+import {
+  deriveInvoiceLinesFromReceived,
+  readReceivedNetLines,
+} from './received-lines.js';
 import { throwServerError } from '../../lib/errorCodes.js';
 import { readAvailableProviderPurchases } from './available-purchases.js';
 /**
@@ -39,6 +42,7 @@ import type {
   AvailableProviderPurchasesInput,
   CreateProviderInvoiceInput,
   CreateProviderOpeningBalanceInput,
+  PendingProviderRemisionsInput,
   RecordProviderCreditInput,
   RecordProviderPaymentInput,
 } from '../../trpc/schemas/providerPayables.js';
@@ -143,11 +147,68 @@ export function createProviderInvoice(
       // purchaseId and may carry several deliveries (remisiones) that one
       // final invoice covers. The legacy column keeps the single-purchase link
       // for compatibility; the bridge table is the complete source of truth.
-      const linkedPurchaseIds = input.purchaseIds?.length
-        ? input.purchaseIds
-        : input.purchaseId
-          ? [input.purchaseId]
-          : [];
+      //
+      // Grouping remisiones is the real-world flow: the invoice arrives with
+      // the papers it covers, so the command receives those papers and reads
+      // the deliveries they document from them instead of trusting the client
+      // with both sides of the same fact.
+      const linkedRemisionIds = input.remisionIds ?? [];
+      let remisionPurchaseIds: string[] = [];
+      if (linkedRemisionIds.length > 0) {
+        const remisions = tx
+          .select({
+            id: purchaseRemisions.id,
+            number: purchaseRemisions.number,
+            providerId: purchaseRemisions.providerId,
+            purchaseId: purchaseRemisions.purchaseId,
+            invoicingStatus: purchaseRemisions.invoicingStatus,
+          })
+          .from(purchaseRemisions)
+          .where(
+            and(
+              eq(purchaseRemisions.tenantId, ctx.tenantId),
+              inArray(purchaseRemisions.id, linkedRemisionIds)
+            )
+          )
+          .all();
+        if (remisions.length !== linkedRemisionIds.length) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'One or more remisiones were not found',
+          });
+        }
+        const remisionById = new Map(remisions.map(remision => [remision.id, remision] as const));
+        for (const remisionId of linkedRemisionIds) {
+          const remision = remisionById.get(remisionId)!;
+          if (remision.providerId !== input.providerId) {
+            throwServerError({
+              trpcCode: 'CONFLICT',
+              errorCode: 'PROVIDER_PAYABLE_PURCHASE_MISMATCH',
+              message: `Remisión ${remision.number} does not belong to the selected provider`,
+            });
+          }
+          // A paper the supplier already invoiced cannot be grouped again: it
+          // would be paid twice.
+          if (remision.invoicingStatus !== 'pending') {
+            throwServerError({
+              trpcCode: 'CONFLICT',
+              errorCode: 'PROVIDER_PAYABLE_PURCHASE_ALREADY_INVOICED',
+              message: `Remisión ${remision.number} is already covered by a supplier invoice`,
+            });
+          }
+        }
+        // Request order keeps the audit trail readable and stable.
+        remisionPurchaseIds = linkedRemisionIds.map(
+          remisionId => remisionById.get(remisionId)!.purchaseId
+        );
+      }
+      const linkedPurchaseIds = remisionPurchaseIds.length
+        ? remisionPurchaseIds
+        : input.purchaseIds?.length
+          ? input.purchaseIds
+          : input.purchaseId
+            ? [input.purchaseId]
+            : [];
 
       let siteId: string;
       if (linkedPurchaseIds.length > 0) {
@@ -230,77 +291,52 @@ export function createProviderInvoice(
         siteId = requireSiteId(ctx);
       }
 
-      // Strict line-by-line reconciliation (owner decision D1): when invoice
-      // lines are provided — mandatory when consolidating several purchases —
-      // every product received across the linked purchases must match its
-      // invoice line in base-unit quantity and in line total, and the lines
-      // must add up to the invoice amount. Any difference rejects the invoice
-      // with the per-product detail; accepting a difference stays an explicit
-      // admin decision in a follow-up.
-      if (input.lines?.length) {
-        const received = tx
-          .select({
-            productId: purchaseItems.productId,
-            baseQuantity: sql<number>`sum(${purchaseItems.quantity} * ${purchaseItems.unitEquivalence})`,
-            lineTotal: sql<number>`sum(${purchaseItems.total})`,
-          })
-          .from(purchaseItems)
-          .where(inArray(purchaseItems.purchaseId, linkedPurchaseIds))
-          .groupBy(purchaseItems.productId)
-          .all();
-        const receivedByProduct = new Map(received.map(row => [row.productId, row]));
-
-        // Goods sent back to the provider leave the store, so they cannot be
-        // invoiced: what reconciles is received minus returned, in base units
-        // and in value. Without this netting, a partially returned delivery
-        // reconciled as if nothing had come back.
-        const returned = tx
-          .select({
-            productId: purchaseReturnItems.productId,
-            baseQuantity: sql<number>`sum(${purchaseReturnItems.quantity} * ${purchaseReturnItems.unitEquivalence})`,
-            lineTotal: sql<number>`sum(${purchaseReturnItems.total})`,
-          })
-          .from(purchaseReturnItems)
-          .innerJoin(purchaseReturns, eq(purchaseReturnItems.purchaseReturnId, purchaseReturns.id))
-          .where(
-            and(
-              eq(purchaseReturns.tenantId, ctx.tenantId),
-              inArray(purchaseReturns.purchaseId, linkedPurchaseIds)
-            )
-          )
-          .groupBy(purchaseReturnItems.productId)
-          .all();
-        const returnedByProduct = new Map(returned.map(row => [row.productId, row]));
-
+      // Strict line-by-line reconciliation (owner decision D1): every product
+      // received across the linked purchases must match its invoice line in
+      // base-unit quantity and in line total, and the lines must add up to the
+      // invoice amount. Any difference rejects the invoice with the per-product
+      // detail; accepting a difference stays an explicit admin decision in a
+      // follow-up.
+      //
+      // Grouping remisiones derives the lines from the covered deliveries
+      // themselves — the supplier prints one line per product it shipped — so
+      // the operator cannot pair an invoice with papers it does not describe.
+      // Explicit lines stay accepted and must still match.
+      const receivedNetLines =
+        linkedPurchaseIds.length > 0
+          ? readReceivedNetLines(tx, ctx.tenantId, linkedPurchaseIds)
+          : [];
+      const invoiceLines = input.lines?.length
+        ? input.lines
+        : linkedRemisionIds.length > 0
+          ? deriveInvoiceLinesFromReceived(receivedNetLines)
+          : [];
+      if (invoiceLines.length > 0) {
         const lineTotalsByProduct = new Map<string, { quantity: number; lineTotal: number }>();
-        for (const line of input.lines) {
+        for (const line of invoiceLines) {
           const current = lineTotalsByProduct.get(line.productId) ?? { quantity: 0, lineTotal: 0 };
           const lineQuantity = current.quantity + line.quantity;
           const lineTotal = current.lineTotal + roundMoney(line.quantity * line.unitCost);
           lineTotalsByProduct.set(line.productId, { quantity: lineQuantity, lineTotal });
         }
 
+        const netByProduct = new Map(receivedNetLines.map(line => [line.productId, line] as const));
         const discrepancies: string[] = [];
-        const productIds = new Set([...receivedByProduct.keys(), ...lineTotalsByProduct.keys()]);
+        const productIds = new Set([...netByProduct.keys(), ...lineTotalsByProduct.keys()]);
         for (const productId of productIds) {
-          const receivedRow = receivedByProduct.get(productId);
-          const returnedRow = returnedByProduct.get(productId);
+          const netRow = netByProduct.get(productId);
           const invoiceRow = lineTotalsByProduct.get(productId);
-          const receivedQuantity = receivedRow ? Number(receivedRow.baseQuantity) : 0;
-          const returnedQuantity = returnedRow ? Number(returnedRow.baseQuantity) : 0;
-          const netQuantity = roundQuantity(receivedQuantity - returnedQuantity, 12);
-          const receivedTotal = receivedRow ? roundMoney(Number(receivedRow.lineTotal)) : 0;
-          const returnedTotal = returnedRow ? roundMoney(Number(returnedRow.lineTotal)) : 0;
-          const netTotal = roundMoney(receivedTotal - returnedTotal);
           const invoiceQuantity = invoiceRow?.quantity ?? 0;
           const invoiceTotal = invoiceRow ? roundMoney(invoiceRow.lineTotal) : 0;
+          const netQuantity = netRow?.netQuantity ?? 0;
+          const netTotal = netRow?.netTotal ?? 0;
           if (Math.abs(netQuantity - invoiceQuantity) > 1e-9) {
             discrepancies.push(
-              `product ${productId}: invoiced ${invoiceQuantity} but received ${netQuantity} base units after ${returnedQuantity} returned`
+              `product ${productId}: invoiced ${invoiceQuantity} but received ${netQuantity} base units after ${netRow?.returnedQuantity ?? 0} returned`
             );
           } else if (Math.abs(netTotal - invoiceTotal) > 0.005) {
             discrepancies.push(
-              `product ${productId}: invoiced ${invoiceTotal.toFixed(2)} but received ${netTotal.toFixed(2)} after ${returnedTotal.toFixed(2)} returned`
+              `product ${productId}: invoiced ${invoiceTotal.toFixed(2)} but received ${netTotal.toFixed(2)} after ${(netRow?.returnedTotal ?? 0).toFixed(2)} returned`
             );
           }
         }
@@ -363,6 +399,43 @@ export function createProviderInvoice(
           .run();
       }
 
+      // Grouping closes the loop: every covered remisión becomes `invoiced`
+      // and points at the invoice that covers it. The status is part of the
+      // update guard so a paper claimed by another invoice cannot be claimed
+      // twice, and a partial claim rolls the whole command back.
+      //
+      // The claim follows the deliveries, not the key the client used: an
+      // invoice created through the purchase picker covers that delivery's
+      // paper too, so its remisión cannot stay pending and be grouped again.
+      if (linkedPurchaseIds.length > 0) {
+        const claimed = tx
+          .update(purchaseRemisions)
+          .set({
+            invoicingStatus: 'invoiced',
+            payableInvoiceId: invoiceId,
+            syncStatus: 'pending',
+            syncVersion: sql`COALESCE(${purchaseRemisions.syncVersion}, 0) + 1`,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(purchaseRemisions.tenantId, ctx.tenantId),
+              inArray(purchaseRemisions.purchaseId, linkedPurchaseIds),
+              eq(purchaseRemisions.invoicingStatus, 'pending')
+            )
+          )
+          .run();
+        // Grouping named the papers, so every one of them must have been
+        // pending and claimed here; anything less means another invoice won.
+        if (linkedRemisionIds.length > 0 && claimed.changes !== linkedRemisionIds.length) {
+          throwServerError({
+            trpcCode: 'CONFLICT',
+            errorCode: 'PROVIDER_PAYABLE_PURCHASE_ALREADY_INVOICED',
+            message: 'A remisión was already covered by another supplier invoice',
+          });
+        }
+      }
+
       writeAuditLog({
         tx,
         tenantId: ctx.tenantId,
@@ -375,6 +448,7 @@ export function createProviderInvoice(
           providerId: input.providerId,
           purchaseId: linkedPurchaseIds.length === 1 ? linkedPurchaseIds[0]! : null,
           purchaseIds: linkedPurchaseIds,
+          remisionIds: linkedRemisionIds,
           documentNumber: input.documentNumber,
           amount,
           dueAt: input.dueAt,
@@ -1041,4 +1115,16 @@ export function listAvailableProviderPurchases(
 ) {
   assertProvider(db, tenantId, input.providerId);
   return readAvailableProviderPurchases(db, tenantId, input);
+}
+
+/**
+ * Waiting queue of delivery notes: the papers this provider has not invoiced
+ * yet, ready to be grouped into the invoice that covers them.
+ */
+export function listPendingProviderRemisions(
+  db: DatabaseInstance,
+  tenantId: string,
+  input: PendingProviderRemisionsInput
+) {
+  return readPendingProviderRemisions(db, tenantId, input);
 }
