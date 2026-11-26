@@ -36,6 +36,7 @@ import {
   createPurchaseFromOrder,
   getPurchaseDocument,
   getPurchaseRecord,
+  readPurchaseFlowProgress,
   returnPurchase,
   setPurchaseDocument,
   voidPurchase,
@@ -140,9 +141,19 @@ export const purchasesRouter = router({
 
     const totalItems = countResult?.count ?? 0;
 
+    // Which step of the purchase flow each receipt is standing in, read from
+    // the ordered lines, the lines that entered stock and the remisión's
+    // invoicing status. Never inferred from the purchase status alone.
+    const flowByPurchaseId = readPurchaseFlowProgress(
+      ctx.db,
+      ctx.tenantId,
+      items.map(item => ({ id: item.id, orderId: item.orderId, status: item.status }))
+    );
+
     return {
       items: items.map(item => ({
         ...item,
+        flow: flowByPurchaseId.get(item.id) ?? null,
         returnedAmount: returnSummaryByPurchaseId.get(item.id)?.returnedAmount ?? 0,
         returnedAt: returnSummaryByPurchaseId.get(item.id)?.returnedAt ?? null,
         latestReturnReason: returnSummaryByPurchaseId.get(item.id)?.latestReturnReason ?? null,

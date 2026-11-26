@@ -127,7 +127,8 @@
     "returnItemsTitle": "Devolver artículos",
     "viewPurchase": "Ver {{number}}",
     "viewPurchaseTitle": "Ver recibo",
-    "exportTitle": "Historial de recibos"
+    "exportTitle": "Historial de recibos",
+    "flow": "Paso"
   },
   "confirm": {
     "void": {
@@ -242,6 +243,20 @@
       "success": "Factura registrada",
       "successDetail": "Las remisiones seleccionadas quedaron facturadas.",
       "error": "No se pudo agrupar las remisiones"
+    }
+  },
+  "flow": {
+    "stage": {
+      "pending": "Pendiente",
+      "partial": "Parcial {{received}}/{{ordered}}",
+      "received": "Recibido",
+      "invoiced": "Facturado"
+    },
+    "next": {
+      "pending": "Siguiente: recibir la mercancía",
+      "partial": "Siguiente: recibir lo que falta",
+      "received": "Siguiente: facturar",
+      "invoiced": "Siguiente: pagar"
     }
   }
 }

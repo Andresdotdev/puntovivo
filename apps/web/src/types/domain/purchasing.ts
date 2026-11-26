@@ -2,6 +2,25 @@
 
 import type { OrderStatus, PurchaseStatus, SyncStatus } from '../ui';
 
+/**
+ * Step of the Colombian purchase flow a receipt is standing in.
+ *
+ * `pending` = nothing entered stock yet, `partial` = less arrived than the
+ * order asked for, `received` = the goods are in and the supplier invoice is
+ * missing, `invoiced` = the remisión that documents them is already covered by
+ * an invoice. The server reads it from the ordered lines, the lines that
+ * entered stock and the remisión's invoicing status, never from a guess.
+ */
+export type PurchaseFlowStage = 'pending' | 'partial' | 'received' | 'invoiced';
+
+export interface PurchaseFlowProgress {
+  stage: PurchaseFlowStage;
+  /** Quantity the order asked for, in base units (own lines for a direct purchase). */
+  orderedQuantity: number;
+  /** Quantity that actually entered stock, in base units. */
+  receivedQuantity: number;
+}
+
 export interface Purchase {
   id: string;
   tenantId: string;
@@ -31,6 +50,12 @@ export interface Purchase {
    * paper and whether the supplier invoice already covers it.
    */
   remision?: PurchaseRemision | null;
+  /**
+   * Which step of the flow this receipt is in and what is still missing, so the
+   * employee never has to guess what comes next. Absent on records read before
+   * the server exposed it.
+   */
+  flow?: PurchaseFlowProgress | null;
   document?: {
     fileName: string | null;
     mimeType: string;

@@ -8,8 +8,8 @@ import { TableLoadingState } from '@/components/tables/TableLoadingState';
 import { TableExportActions } from '@/components/tables/TableExportActions';
 import { Badge, type BadgeVariant } from '@/components/ui';
 import { purchaseHistoryExportColumns } from '@/features/purchases/purchaseHistoryExport';
-import { formatCurrency } from '@/lib/utils';
-import type { Purchase } from '@/types';
+import { formatCurrency, formatNumber } from '@/lib/utils';
+import type { Purchase, PurchaseFlowStage } from '@/types';
 
 const purchaseStatusTones: Record<Purchase['status'], BadgeVariant> = {
   draft: 'warning',
@@ -17,6 +17,15 @@ const purchaseStatusTones: Record<Purchase['status'], BadgeVariant> = {
   partial_returned: 'primary',
   returned: 'danger',
   voided: 'warning',
+};
+
+/** How far along the flow a receipt is: nothing wasted on a guess, the tone
+ * only accelerates the scan and the label always carries the meaning. */
+const purchaseFlowTones: Record<PurchaseFlowStage, BadgeVariant> = {
+  pending: 'warning',
+  partial: 'info',
+  received: 'primary',
+  invoiced: 'success',
 };
 
 interface PurchasesHistoryTableProps {
@@ -71,6 +80,32 @@ export function PurchasesHistoryTable({
             {t(`status.${row.original.status}`)}
           </Badge>
         ),
+      },
+      // The step of the flow the receipt is in, and the one thing left to do.
+      // Both come from what the server read (ordered vs received lines, plus
+      // the remisión invoicing status), so the employee never has to guess.
+      {
+        id: 'flow',
+        header: t('table.flow'),
+        size: 170,
+        cell: ({ row }) => {
+          const flow = row.original.flow;
+          if (!flow) return null;
+
+          return (
+            <div className="flex flex-col items-start gap-1">
+              <Badge variant={purchaseFlowTones[flow.stage]}>
+                {flow.stage === 'partial'
+                  ? t('flow.stage.partial', {
+                      received: formatNumber(flow.receivedQuantity),
+                      ordered: formatNumber(flow.orderedQuantity),
+                    })
+                  : t(`flow.stage.${flow.stage}`)}
+              </Badge>
+              <span className="text-xs text-secondary-500">{t(`flow.next.${flow.stage}`)}</span>
+            </div>
+          );
+        },
       },
       {
         accessorKey: 'total',

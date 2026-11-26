@@ -14,6 +14,12 @@ export { voidPurchase } from './voidPurchase.js';
 export { confirmOcrDraftPurchase } from './confirmOcrDraftPurchase.js';
 export { getPurchaseRecord } from './purchase-read.js';
 export {
+  readPurchaseFlowProgress,
+  resolvePurchaseFlowStage,
+  RECEIVED_PURCHASE_STATUSES,
+} from './flow-stage.js';
+export type { PurchaseFlowProgress, PurchaseFlowStage } from './flow-stage.js';
+export {
   attachPurchaseDocument,
   getPurchaseDocument,
   setPurchaseDocument,
