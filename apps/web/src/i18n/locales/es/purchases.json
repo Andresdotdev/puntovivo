@@ -55,7 +55,8 @@
   "toast": {
     "success": "Compra registrada",
     "successDetail": "artículo(s) agregados al stock",
-    "error": "No se pudo registrar la compra"
+    "error": "No se pudo registrar la compra",
+    "deviceNotRegistered": "Este equipo no está registrado. Cierre sesión y vuelva a entrar para registrarlo y poder registrar la compra."
   },
   "ocr": {
     "title": "OCR de factura",

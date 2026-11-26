@@ -14,6 +14,7 @@ import {
   type PurchaseFinalizeValues,
 } from '@/features/purchases/PurchaseFinalizeModal';
 import { PurchasesHistoryTable } from '@/features/purchases/PurchasesHistoryTable';
+import { purchaseErrorKey } from '@/features/purchases/purchaseErrorMessage';
 import {
   getPurchaseCartSummary,
   hasCompletePurchaseSerials,
@@ -194,9 +195,9 @@ export function PurchasesPage() {
         documentType: values.documentType === '' ? undefined : values.documentType,
         documentNumber: values.documentNumber.trim() || undefined,
       });
-    } catch {
+    } catch (error) {
       stockReceiptMeasurement.recordValidationError();
-      setPurchaseError(t('toast.error'));
+      setPurchaseError(t(purchaseErrorKey(error)));
     }
   };
 

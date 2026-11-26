@@ -55,7 +55,8 @@
   "toast": {
     "success": "Purchase registered",
     "successDetail": "item(s) added to stock",
-    "error": "Unable to register purchase"
+    "error": "Unable to register purchase",
+    "deviceNotRegistered": "This device is not registered. Sign out and sign back in so it registers, then record the purchase."
   },
   "ocr": {
     "title": "Invoice OCR",
