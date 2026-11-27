@@ -33,6 +33,9 @@ export function OrderDetailsModal({
   const { user } = useAuth();
   const toast = useToast();
   const utils = trpc.useUtils();
+  // The printed document goes to the supplier, so it follows the business
+  // language rather than whichever language this operator reads the app in.
+  const tenantLocaleQuery = trpc.tenantLocale.get.useQuery();
   const [isReceiveModalOpen, setIsReceiveModalOpen] = useState(initialMode === 'receive');
   const [receiveModalKey, setReceiveModalKey] = useState(0);
   const [isVoidConfirmOpen, setIsVoidConfirmOpen] = useState(false);
@@ -208,7 +211,7 @@ export function OrderDetailsModal({
     }
     setIsPrinting(true);
     try {
-      await printOrderDocument(order);
+      await printOrderDocument(order, { language: tenantLocaleQuery.data?.language });
     } catch (error) {
       const code = error instanceof OrderPrintError ? error.code : 'unknown';
       toast.error({

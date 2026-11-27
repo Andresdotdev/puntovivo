@@ -97,6 +97,19 @@ describe('orderPrinter', () => {
     expect(html).toContain('Submitted');
   });
 
+  it('prints the supplier document in the language of the business, not of the screen', async () => {
+    await i18next.changeLanguage('en');
+
+    const html = await buildOrderDocumentHtml(makeOrder(), {
+      autoPrint: false,
+      language: 'es',
+    });
+
+    expect(html).toContain('Orden de compra');
+    expect(html).toContain('Datos de la orden');
+    expect(html).not.toContain('PURCHASE ORDER');
+  });
+
   it('prints the ordered unit under the quantity so a case reads as a case', async () => {
     const baseItem = makeOrder().items?.[0];
     if (!baseItem) throw new Error('Expected a fixture order item');

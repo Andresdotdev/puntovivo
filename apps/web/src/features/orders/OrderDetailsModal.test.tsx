@@ -86,6 +86,9 @@ vi.mock('@/lib/trpc', () => ({
       products: { list: { invalidate }, search: { invalidate } },
       productSerials: { list: { invalidate }, lookup: { invalidate } },
     }),
+    tenantLocale: {
+      get: { useQuery: () => ({ data: { language: 'es' } }) },
+    },
     orders: {
       getById: {
         useQuery: () => ({ data: orderState.value, isLoading: false, error: null }),
@@ -181,6 +184,9 @@ describe('OrderDetailsModal draft lifecycle', () => {
 
     await user.click(screen.getByRole('button', { name: 'Print order' }));
 
-    await waitFor(() => expect(printOrderDocumentMock).toHaveBeenCalledWith(order));
+    // The document follows the business language, not the screen's.
+    await waitFor(() =>
+      expect(printOrderDocumentMock).toHaveBeenCalledWith(order, { language: 'es' })
+    );
   });
 });

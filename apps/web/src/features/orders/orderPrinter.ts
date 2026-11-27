@@ -46,6 +46,14 @@ type OrderStatusForPrint = Order['status'];
 
 interface OrderHtmlOptions {
   autoPrint: boolean;
+  /**
+   * Language of the business, not of the screen that prints.
+   *
+   * The document goes to a supplier, so it follows the tenant's language: a
+   * cashier running the app in English must not hand a Colombian provider a
+   * purchase order written in English.
+   */
+  language?: string | undefined;
 }
 
 type OrderPrintErrorCode = 'notPrintable' | 'popupBlocked' | 'desktopBridgeFailed' | 'unknown';
@@ -109,14 +117,14 @@ function buildOrderRows(order: PrintableOrder, showReceiptProgress: boolean): st
 
 export async function buildOrderDocumentHtml(
   order: PrintableOrder,
-  { autoPrint }: OrderHtmlOptions = { autoPrint: false }
+  { autoPrint, language: businessLanguage }: OrderHtmlOptions = { autoPrint: false }
 ): Promise<string> {
   // `orders` is a lazy namespace: load it before `getFixedT` reads it so a
   // document printed from a screen that never mounted the namespace renders
   // real copy instead of raw keys.
   await i18next.loadNamespaces(['orders', 'common']);
-  const t = i18next.getFixedT(null, ['orders', 'common']);
-  const language = i18next.resolvedLanguage ?? i18next.language ?? 'en';
+  const t = i18next.getFixedT(businessLanguage ?? null, ['orders', 'common']);
+  const language = businessLanguage ?? i18next.resolvedLanguage ?? i18next.language ?? 'en';
   const items = order.items ?? [];
   const showReceiptProgress = order.status === 'partial_received';
   const notesSection = order.notes
@@ -230,7 +238,10 @@ ${autoPrint ? AUTO_PRINT_SCRIPT : ''}
   `;
 }
 
-export async function printOrderDocument(order: PrintableOrder): Promise<void> {
+export async function printOrderDocument(
+  order: PrintableOrder,
+  { language }: { language?: string | undefined } = {}
+): Promise<void> {
   if (!canPrintOrder(order)) {
     throw new OrderPrintError(
       'notPrintable',
@@ -239,7 +250,7 @@ export async function printOrderDocument(order: PrintableOrder): Promise<void> {
   }
 
   await printHtmlDocument({
-    buildHtml: options => buildOrderDocumentHtml(order, options),
+    buildHtml: options => buildOrderDocumentHtml(order, { ...options, language }),
     createError: (code, message) => new OrderPrintError(code, message),
     desktopBridgeFailedMessage: 'Unable to print the purchase order',
     unknownErrorMessage: 'Unable to print the purchase order',
