@@ -21,9 +21,7 @@ function parseDocument(html: string): Document {
  * document would pass even with the quantity cells wrong or missing.
  */
 function readCells(parsed: Document, selector: string): string[] {
-  return Array.from(parsed.querySelectorAll(selector), cell =>
-    (cell.textContent ?? '').trim()
-  );
+  return Array.from(parsed.querySelectorAll(selector), cell => (cell.textContent ?? '').trim());
 }
 
 function makeOrder(overrides: Partial<Order> = {}): Order {
@@ -127,8 +125,8 @@ describe('orderPrinter', () => {
       })
     );
 
-    expect(html).toContain('class="item-unit"');
-    expect(html).toContain('Cajas');
+    const parsed = parseDocument(html);
+    expect(readCells(parsed, 'tbody td.item-qty .item-unit')).toEqual(['Cajas']);
   });
 
   it('adds received and pending columns only when the order is partially received', async () => {
@@ -159,9 +157,14 @@ describe('orderPrinter', () => {
     expect(submittedDocument.querySelector('td.item-pending')).toBeNull();
 
     const partialDocument = parseDocument(partiallyReceived);
+    expect(readCells(partialDocument, 'thead th.item-received')).toEqual(['Received']);
+    expect(readCells(partialDocument, 'thead th.item-pending')).toEqual(['Pending']);
+    expect(readCells(partialDocument, 'thead th.item-cost')).toEqual(['Cost']);
+    expect(readCells(partialDocument, 'thead th.item-total')).toEqual(['Total']);
     expect(readCells(partialDocument, 'tbody td.item-qty')).toEqual([`${formatNumber(7)}Unit`]);
     expect(readCells(partialDocument, 'tbody td.item-received')).toEqual([formatNumber(3)]);
     expect(readCells(partialDocument, 'tbody td.item-pending')).toEqual([formatNumber(4)]);
+    expect(partiallyReceived).toContain('padding-left: 10px;');
   });
 
   it('counts the requested items and states the document is not fiscal', async () => {
@@ -236,9 +239,7 @@ describe('orderPrinter', () => {
 
   it('resolves quietly when the operator cancels the native print dialog', async () => {
     window.electron = {
-      printReceipt: vi.fn(
-        async () => ({ success: false, errorCode: 'PRINT_CANCELLED' })
-      ),
+      printReceipt: vi.fn(async () => ({ success: false, errorCode: 'PRINT_CANCELLED' })),
     } as unknown as typeof window.electron;
 
     await expect(printOrderDocument(makeOrder())).resolves.toBeUndefined();
